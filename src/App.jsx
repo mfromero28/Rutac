@@ -159,7 +159,6 @@ const loadUsers = () => {
 };
 const saveUsers = (users) => localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
 
-// ==================== UTILS ====================
 function getInitials(name) {
   return name?.split(" ").filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "U";
 }
