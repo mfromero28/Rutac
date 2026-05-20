@@ -155,7 +155,7 @@ function LoginPage({ onLogin, onRegister }) {
 
   const handleLogin = () => {
     if (!email || !pass) { setErr("Completa todos los campos"); return; }
-    if (email.toLowerCase() === ADMIN_EMAIL && pass === ADMIN_PASS) {
+    if (email.toLowerCase().trim() === ADMIN_EMAIL && pass === ADMIN_PASS) {
       const admin = { email: ADMIN_EMAIL, role: "admin", razonSocial: "Cámara de Comercio de Santa Marta" };
       saveCurrent(admin); onLogin(admin); return;
     }
@@ -169,35 +169,60 @@ function LoginPage({ onLogin, onRegister }) {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#EEF3F8", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: base.fontFamily }}>
-      <div style={{ background: "#fff", borderRadius: 18, padding: "2.5rem", width: 380, boxShadow: "0 4px 24px rgba(0,0,0,0.09)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 28 }}>
-          <div style={{ width: 38, height: 38, borderRadius: 8, background: "#0F9B8E", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 20 }}>C</div>
-          <span style={{ fontSize: 20, fontWeight: 700 }}>Ruta <span style={{ color: "#0F9B8E" }}>C</span> Conecta</span>
+    <div style={{ minHeight: "100vh", background: "#EEF3F8", fontFamily: base.fontFamily, display: "flex", flexDirection: "column" }}>
+      <nav style={{ background: "#fff", borderBottom: "1px solid #EAEAEA", padding: "0 2rem", display: "flex", alignItems: "center", height: 56 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 8, background: "#0F9B8E", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 18 }}>C</div>
+          <span style={{ fontSize: 18, fontWeight: 700 }}>Ruta <span style={{ color: "#0F9B8E" }}>C</span> Conecta</span>
         </div>
-        <h2 style={{ margin: "0 0 6px", fontSize: 22 }}>Bienvenido de vuelta</h2>
-        <p style={{ color: "#666", marginBottom: 22, fontSize: 14 }}>Ingresa a tu cuenta de emprendedor</p>
-        <Field label="Correo electrónico">
-          <input value={email} onChange={e => { setEmail(e.target.value); setErr(""); }}
-            placeholder="tu@correo.com" style={base.input} onKeyDown={e => e.key === "Enter" && handleLogin()} />
-        </Field>
-        <Field label="Contraseña">
-          <input type="password" value={pass} onChange={e => { setPass(e.target.value); setErr(""); }}
-            placeholder="••••••••" style={base.input} onKeyDown={e => e.key === "Enter" && handleLogin()} />
-        </Field>
-        {err && <p style={{ ...base.error, marginBottom: 10 }}>{err}</p>}
-        <Btn full onClick={handleLogin}>Entrar</Btn>
-        <p style={{ textAlign: "center", marginTop: 18, fontSize: 14, color: "#555" }}>
-          ¿Aún no tienes cuenta?{" "}
-          <span onClick={onRegister} style={{ color: "#0F9B8E", cursor: "pointer", fontWeight: 600 }}>Regístrate gratis</span>
-        </p>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontSize: 14, color: "#333", fontWeight: 500 }}>Iniciar sesión</span>
+          <div style={{ width: 34, height: 34, borderRadius: 8, border: "1.5px solid #D8DDE5", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+          </div>
+        </div>
+      </nav>
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
+        <div style={{ background: "#fff", borderRadius: 20, padding: "2.5rem", width: "100%", maxWidth: 420, boxShadow: "0 4px 24px rgba(0,0,0,0.08)" }}>
+          <p style={{ color: "#0F9B8E", fontWeight: 700, fontSize: 12, letterSpacing: 1, textTransform: "uppercase", margin: "0 0 10px", textAlign: "center" }}>ACCESO EMPRENDEDOR</p>
+          <h2 style={{ margin: "0 0 6px", fontSize: 26, fontWeight: 800, textAlign: "center", color: "#1A1A2E" }}>Bienvenido de vuelta</h2>
+          <p style={{ color: "#888", marginBottom: 28, fontSize: 14, textAlign: "center" }}>Entra para ver tus recomendaciones del día.</p>
+          <div style={{ marginBottom: 14 }}>
+            <label style={base.label}>Email <span style={{ color: "#D85A30" }}>*</span></label>
+            <div style={{ position: "relative" }}>
+              <svg style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              <input value={email} onChange={e => { setEmail(e.target.value); setErr(""); }}
+                placeholder="tunegocio@gmail.com" style={{ ...base.input, paddingLeft: 40 }}
+                onKeyDown={e => e.key === "Enter" && handleLogin()} />
+            </div>
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={base.label}>Contraseña <span style={{ color: "#D85A30" }}>*</span></label>
+            <div style={{ position: "relative" }}>
+              <svg style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <input type="password" value={pass} onChange={e => { setPass(e.target.value); setErr(""); }}
+                placeholder="Mínimo 6 caracteres" style={{ ...base.input, paddingLeft: 40 }}
+                onKeyDown={e => e.key === "Enter" && handleLogin()} />
+            </div>
+          </div>
+          {err && <p style={{ color: "#D85A30", fontSize: 12, marginBottom: 12, textAlign: "center" }}>{err}</p>}
+          <button onClick={handleLogin} style={{
+            width: "100%", padding: "14px", background: "#0F9B8E", color: "#fff",
+            border: "none", borderRadius: 12, fontWeight: 700, fontSize: 16,
+            cursor: "pointer", fontFamily: base.fontFamily
+          }}>Entrar →</button>
+          <p style={{ textAlign: "center", marginTop: 20, fontSize: 14, color: "#555" }}>
+            ¿Aún no tienes cuenta?{" "}
+            <span onClick={onRegister} style={{ color: "#0F9B8E", cursor: "pointer", fontWeight: 600 }}>Regístrate gratis</span>
+          </p>
+        </div>
       </div>
     </div>
   );
 }
 
 // ==================== REGISTRO 4 PASOS ====================
-function RegisterPage({ onDone }) {
+function RegisterPage({ onDone, onLogin }) {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     razonSocial: "", registradoCamara: "", sector: "", tiempoOperando: "", descripcion: "",
@@ -285,7 +310,7 @@ function RegisterPage({ onDone }) {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 36, height: 36, borderRadius: 8, background: "#0F9B8E", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 18 }}>C</div>
           <span style={{ fontSize: 18, fontWeight: 700 }}>Ruta <span style={{ color: "#0F9B8E" }}>C</span> Conecta</span>
-          <span style={{ marginLeft: "auto", fontSize: 13, color: "#888", cursor: "pointer" }}>Iniciar sesión</span>
+          <span onClick={onLogin} style={{ marginLeft: "auto", fontSize: 13, color: "#0F9B8E", cursor: "pointer", fontWeight: 600 }}>Iniciar sesión</span>
         </div>
 
         {/* Content */}
@@ -1356,16 +1381,16 @@ export default function App() {
       setUser(saved);
       setScreen("app");
     } else {
-      setScreen("register"); // Show register as landing
+      setScreen("login");
     }
   }, []);
 
   const login = (u) => { setUser(u); setScreen("app"); setPage("Inicio"); };
-  const logout = () => { clearCurrent(); setUser(null); setScreen("register"); };
+  const logout = () => { clearCurrent(); setUser(null); setScreen("login"); };
 
   if (screen === "loading") return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: base.fontFamily, color: "#888" }}>Cargando...</div>;
   if (screen === "login") return <LoginPage onLogin={login} onRegister={() => setScreen("register")} />;
-  if (screen === "register") return <RegisterPage onDone={login} />;
+  if (screen === "register") return <RegisterPage onDone={login} onLogin={() => setScreen("login")} />;
 
   if (user?.role === "admin") return <AdminDashboard />;
 
