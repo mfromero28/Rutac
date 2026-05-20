@@ -464,8 +464,7 @@ function AdminPanel() {
   );
 }
 
-// ==================== ROOT APP ====================
-export default function Root() {
+export default function App() {
   const [screen, setScreen] = useState("login");
   const [user, setUser] = useState(null);
   const [page, setPage] = useState("Inicio");
@@ -473,13 +472,20 @@ export default function Root() {
   useEffect(() => {
     const saved = localStorage.getItem(CURRENT_KEY);
     if (saved) {
-      const u = JSON.parse(saved);
-      setUser(u);
-      setScreen("app");
+      try {
+        const u = JSON.parse(saved);
+        setUser(u);
+        setScreen("app");
+      } catch (e) {}
     }
   }, []);
 
-  const login = (u) => { setUser(u); setScreen("app"); };
+  const login = (u) => {
+    localStorage.setItem(CURRENT_KEY, JSON.stringify(u));
+    setUser(u);
+    setScreen("app");
+  };
+
   const logout = () => {
     localStorage.removeItem(CURRENT_KEY);
     setUser(null);
@@ -492,27 +498,35 @@ export default function Root() {
   if (user?.email === CAMARA_EMAIL) return <AdminPanel />;
 
   const pages = {
-    "Inicio": <div style={{padding:"2rem"}}>Bienvenido, {user?.razonSocial}</div>,
-    "Recomendaciones": <div style={{padding:"2rem"}}>Recomendaciones Inteligentes (en desarrollo)</div>,
-    "Mi clúster": <div style={{padding:"2rem"}}>Tu Clúster: {user?.cluster}</div>,
-    "Conexiones": <div style={{padding:"2rem"}}>Mis Conexiones</div>,
+    "Inicio": <div style={{ padding: "3rem" }}><h1>Bienvenido, {user?.razonSocial || "Emprendedor"}</h1></div>,
     "Marketplace": <MarketplaceP />,
     "Mi negocio": <MyBusinessPage user={user} setUserGlobal={setUser} />,
+    "Mi clúster": <div style={{ padding: "3rem" }}><h2>Mi Clúster: {user?.cluster}</h2></div>,
   };
 
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif", minHeight: "100vh", background: "#F5F7FA" }}>
       <nav style={{ background: "#fff", borderBottom: "1px solid #eee", padding: "1rem 2rem", display: "flex", alignItems: "center", gap: "2rem", position: "sticky", top: 0, zIndex: 100 }}>
         <div style={{ fontWeight: 700, fontSize: 22 }}>Ruta <span style={{ color: "#0F9B8E" }}>C</span> Conecta</div>
+        
         {Object.keys(pages).map(p => (
-          <button key={p} onClick={() => setPage(p)} style={{
-            background: "none", border: "none", fontWeight: page === p ? 600 : 500,
-            color: page === p ? "#0F9B8E" : "#444", borderBottom: page === p ? "3px solid #0F9B8E" : "none",
-            padding: "12px 0", cursor: "pointer"
-          }}>
+          <button 
+            key={p}
+            onClick={() => setPage(p)}
+            style={{
+              background: "none",
+              border: "none",
+              fontWeight: page === p ? 600 : 500,
+              color: page === p ? "#0F9B8E" : "#444",
+              borderBottom: page === p ? "3px solid #0F9B8E" : "none",
+              padding: "12px 0",
+              cursor: "pointer"
+            }}
+          >
             {p}
           </button>
         ))}
+
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
           <Avatar name={user?.razonSocial} size={42} />
           <button onClick={logout} style={{ padding: "8px 16px", background: "#fee", color: "#c33", border: "none", borderRadius: 8 }}>Salir</button>
