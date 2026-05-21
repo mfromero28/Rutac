@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "./supabase.js";
 
 // ==================== DATOS REALES MAGDALENA ====================
 const MUNICIPIOS_BARRIOS = {
@@ -50,26 +51,20 @@ const REGISTRADOS_MUESTRA = [{"s": "ARQUISOLUCIONES DURAN LTDA. EN LIQUIDACION",
 const CLUSTER_MIEMBROS_REALES = {"LOGISTICA": [{"s": "TRANSPASS S.A.S.", "m": "269615", "c": "H4921"}, {"s": "TRANSGOLDEN TRAVEL S.A.S.", "m": "237790", "c": "H4921"}, {"s": "LUBRITRANSPORTES SAS", "m": "270178", "c": "H4923"}, {"s": "DC INVESTMENTS SOLUTIONS SAS", "m": "291441", "c": "H4923"}, {"s": "TRANSPORTES WOL S.A.S.", "m": "274818", "c": "H4923"}, {"s": "MILTON RAFAEL CHARRIS POLO", "m": "241669", "c": "H5011"}, {"s": "CONVENCION TRANSPORTE ESPECIAL S.A.S.", "m": "227582", "c": "H4921"}, {"s": "HENRIQUEZ MIRANDA GABRIEL SEGUNDO", "m": "302138", "c": "H5221"}, {"s": "TRANSPORTES HUMADEA S.A.S.", "m": "114372", "c": "H4923"}, {"s": "OROZCO OROZCO ROSA ISABEL", "m": "280128", "c": "N7710"}, {"s": "SANJUANELO OROZCO JORGE MARIO", "m": "228344", "c": "H4923"}, {"s": "OPERACIONES INTEGRALES DEL CARIBE S.A.S.", "m": "140488", "c": "H5224"}, {"s": "MOVA C&T S.A.S.", "m": "291246", "c": "H5229"}, {"s": "OLARTE PADILLA MERCEDES DE JESUS", "m": "16116", "c": "H4921"}, {"s": "GUERRERO CARVAJALINO MARVIN ALEJANDRO", "m": "299663", "c": "H4923"}, {"s": "LINEAS TECNICAS DE CARGAMENTOS S.A.S -LITECAR S.A.S", "m": "23187", "c": "H4923"}, {"s": "TRANSPORTUR V.I.P S.A.S.", "m": "226109", "c": "H4921"}, {"s": "VALENZUELA LOPEZ NESTOR HENRY", "m": "158082", "c": "H4923"}, {"s": "ANGEL DE DIOS TERNERA CANTILLO", "m": "256171", "c": "H5224"}, {"s": "INTEGRALES HUMANOS S.A.S.", "m": "205122", "c": "H5229"}, {"s": "MEJIA DIAZ LUIS ALBERTO", "m": "217307", "c": "H4921"}, {"s": "THERAN POLO ADALBERTO", "m": "230812", "c": "H4923"}, {"s": "DE VIAJE TRANSPORTE S.A.S.", "m": "287155", "c": "H4921"}, {"s": "MANRIQUE PUELLO PAULO CESAR", "m": "275343", "c": "N7710"}, {"s": "OPERADORA LOGISTICA DEL NORTE S.A.S", "m": "133172", "c": "H5224"}, {"s": "VECTRA LOGISTICA SAS", "m": "302183", "c": "H4923"}, {"s": "TRANSPORTES CSC - SANTA MARTA", "m": "284015", "c": "H4921"}, {"s": "AGENCIA MULTISERVICIOS TRANSEQUIPOS LOGISTICA APURE", "m": "257802", "c": "H4923"}, {"s": "TRIMARES S.A.S.", "m": "240065", "c": "H5229"}, {"s": "TRANSPORTES ELCY S.A.S.", "m": "250159", "c": "H4921"}], "CACAO": [{"s": "JOSE GREGORIO ROA MORENO", "m": "256525", "c": "A0127"}, {"s": "SABORES DE LA SIERRA NEVADA S.A.S.", "m": "274459", "c": "A0127"}, {"s": "CACAOS FINOS COLOMBIANOS S.A.S.", "m": "205918", "c": "A0127"}, {"s": "SAKAI S.A.S", "m": "296830", "c": "A0127"}], "YUCA": [{"s": "ANGARITA HERNANDEZ IRENE", "m": "241796", "c": "A0113"}, {"s": "BUVENO VISTA S.A.S", "m": "290632", "c": "A0113"}, {"s": "AGUIRRE RODRIGUEZ GLORIA ESTELA", "m": "194449", "c": "A0113"}, {"s": "RECURSOS AGRICOLAS DE COLOMBIA S.A.S", "m": "240396", "c": "A0113"}, {"s": "SETAS A-Z SAS", "m": "290729", "c": "A0113"}, {"s": "INVERSIONES JOSEYCA SOCIEDAD EN COMANDITA SIMPLE", "m": "158828", "c": "A0113"}, {"s": "ASCANIO PATIÑO JHONATAN ALEJANDRO", "m": "241521", "c": "A0113"}, {"s": "MABI MAGDALENA S.A.S.", "m": "236937", "c": "A0113"}, {"s": "CULTIVOS E INSUMOS C.H.S. S.A.S.", "m": "264660", "c": "A0113"}, {"s": "TORRES MERIÑO SAMIR JULIAN", "m": "181334", "c": "A0113"}, {"s": "VEGETALES GOURMET SAS", "m": "282792", "c": "A0113"}, {"s": "AGROCENTRO MAGDALENA S.A.S.", "m": "256791", "c": "A0113"}, {"s": "MARIO ALONSO PAVAJEAU ROPAIN", "m": "257562", "c": "A0113"}, {"s": "GONZALEZ GAMEZ SANDRA MILENA", "m": "178668", "c": "A0113"}], "TURISMO": [{"s": "CARDONA RODRIGUEZ YORELIS MARIA", "m": "274913", "c": "I5630"}, {"s": "OSSA GOMEZ MAAYAN OR", "m": "282116", "c": "I5611"}, {"s": "GIL HURTADO TANIA ISABEL", "m": "188669", "c": "I5519"}, {"s": "CARREÑO ARDILA JOSE LUIS", "m": "278443", "c": "I5511"}, {"s": "BEJARANO LOBERA LIBIA", "m": "301372", "c": "I5519"}, {"s": "GUALDRON OSPINA JUAN CAMILO", "m": "291184", "c": "I5611"}, {"s": "MORENO VILLAMIL JUAN MANUEL", "m": "169880", "c": "I5512"}, {"s": "FARELO NORIEGA VITELMA PATRICIA", "m": "176794", "c": "I5611"}, {"s": "PINZON CALDERON ALBERTO", "m": "186944", "c": "I5621"}, {"s": "NUEVO DRAGON CHINO S.A.S.", "m": "232531", "c": "I5611"}, {"s": "MACIAS CARDONA KARINA JUDITH", "m": "224441", "c": "I5611"}, {"s": "FLOREZ MEDINA SANDRA MARCELA", "m": "159269", "c": "I5611"}, {"s": "SANCHEZ ROA CESAR AUGUSTO", "m": "7461", "c": "I5619"}, {"s": "GARCIA VEGA LILIANA INES", "m": "178817", "c": "I5519"}, {"s": "JAROS ONDREJ", "m": "256679", "c": "I5519"}, {"s": "MONTES ESPAÑA LUIS ELIECER", "m": "242199", "c": "I5530"}, {"s": "DANA MARIA LOPEZ PALENCIA", "m": "260783", "c": "I5630"}, {"s": "CLARO SANGUINO LUIS MIGUEL", "m": "293710", "c": "I5630"}, {"s": "PABON CASTRO MARIA CAROLINA", "m": "271163", "c": "I5630"}, {"s": "ORTEGA HERNANDEZ EDILMA ROSA", "m": "293749", "c": "I5611"}, {"s": "YECENIA CARCAMO CANTILLO", "m": "253238", "c": "I5611"}, {"s": "SANTANA RODRIGUEZ JESUS EDUARDO", "m": "221216", "c": "I5519"}, {"s": "TEWIMAKE S.A.S", "m": "301874", "c": "I5511"}, {"s": "AS & JS S.A.S.", "m": "302130", "c": "I5630"}, {"s": "AVILA PEREZ LIDA EUGENIA", "m": "282571", "c": "I5519"}, {"s": "NUÑEZ HENRIQUEZ JOSE MANUEL", "m": "291213", "c": "I5619"}, {"s": "MONICA VIVIANA PRADO PALOMO", "m": "242692", "c": "I5519"}, {"s": "ORTEGA BUITRAGO DARIO", "m": "97097", "c": "I5611"}, {"s": "RAMIREZ RAMIREZ HECTOR DE JESUS", "m": "302161", "c": "I5611"}, {"s": "GALVIS AGUDELO LUIS ARGIRO", "m": "281374", "c": "I5630"}], "MANGO": [{"s": "MATTA JIMENEZ JAVIER", "m": "47314", "c": "A0121"}, {"s": "HOYOS SANDOVAL JEIMIS PAOLA", "m": "291845", "c": "A0121"}, {"s": "INVERSIONES PEGASO S.A.S.", "m": "31742", "c": "A0121"}, {"s": "COMPAÑÍA DE FRUTAS COLOMBIANAS S.A.S.", "m": "204655", "c": "A0121"}, {"s": "AGROMONSA INVERSIONES S.A.S", "m": "260176", "c": "A0121"}, {"s": "CAMPO ARREGOCES SILETH FRANCISCO", "m": "279201", "c": "A0121"}, {"s": "VALERO SIERRA YOLIMA PATRICIA", "m": "162142", "c": "A0121"}, {"s": "BELTRAN CANTILLO GREGORIO", "m": "297431", "c": "A0121"}, {"s": "RURA EXPORTA CIA. LTDA.", "m": "26022", "c": "A0121"}, {"s": "CEBALLOS E HIJOS S. EN C.", "m": "27644", "c": "A0121"}, {"s": "AROMAS DE ATALAYA SAS", "m": "255581", "c": "A0121"}, {"s": "AGROPECUARIA ALJUSTREL S.A.S.", "m": "59282", "c": "A0121"}, {"s": "PREVENCION INVERSIONES S.A.S.", "m": "278386", "c": "A0121"}, {"s": "CAPA HOLDING S.A.S.", "m": "265822", "c": "A0121"}, {"s": "DANGOND OLIVELLA SAS", "m": "29987", "c": "A0121"}, {"s": "INVERSIONES LA VELA S.A.S.", "m": "173324", "c": "A0121"}, {"s": "CARIBEAN LIME S.A.S.", "m": "251696", "c": "A0121"}, {"s": "GLOBAL TROPIC CI S.A.S.", "m": "237467", "c": "A0121"}, {"s": "EL EDÉN HASS COMPANY S.A.S.", "m": "163242", "c": "A0121"}, {"s": "SIERRA NATIVE ORGANICS S.A.S.", "m": "224214", "c": "A0121"}, {"s": "CORREA DELGADO MARTHA CECILIA", "m": "29840", "c": "A0121"}, {"s": "ARIZA ARIZA HERNANDO", "m": "57887", "c": "A0121"}, {"s": "HECTOR JULIO HERRERA CUJIA", "m": "282095", "c": "A0121"}, {"s": "YOLANDA YANET LANDERO BOLAÑO", "m": "272955", "c": "A0121"}, {"s": "FRUTAS DE MACONDO S.A.S.", "m": "196385", "c": "A0121"}, {"s": "INVERSIONES AGRICOLAS S.A. INVERAGRO S.A.", "m": "93026", "c": "A0121"}, {"s": "CODINA PEREZ VILMA SOFIA", "m": "275198", "c": "A0121"}, {"s": "INCOLFRUTA S.A.S", "m": "216436", "c": "A0121"}, {"s": "CS FRUTAS S.A.S.", "m": "253239", "c": "A0121"}, {"s": "PAREJO AHUMADA PEDRO MIGUEL", "m": "125071", "c": "A0121"}], "PALMADEACEITE": [{"s": "MAKALI 1 S.A.S.", "m": "242450", "c": "A0126"}, {"s": "PAANA S.A.S", "m": "274609", "c": "A0126"}, {"s": "MB & ASOCIADOS S.A.S.", "m": "183672", "c": "A0126"}, {"s": "DE LAVALLE RESTREPO LEONARDO", "m": "56911", "c": "A0126"}, {"s": "INVERSIONES SAN PIO S.A.S.", "m": "133431", "c": "A0126"}, {"s": "COMERCIALIZADORA CANAN S.A.S.", "m": "293400", "c": "A0126"}, {"s": "INVERSIONES SANTA PALMA S.A.S. EN LIQUIDACION", "m": "141533", "c": "A0126"}, {"s": "INVERSIONES DUBLIN S.A.S.", "m": "227250", "c": "A0126"}, {"s": "AGRICOLA CANAL AJI S.A.S.", "m": "143173", "c": "A0126"}, {"s": "CEVILA S.A.S.", "m": "181181", "c": "A0126"}, {"s": "AGROINDUSTRIA ENTRE PALMAS S.A.S.", "m": "251423", "c": "A0126"}, {"s": "FRUTOS Y RACIMOS SAS", "m": "256476", "c": "A0126"}, {"s": "AGROCOL V&J S.A.S.", "m": "255593", "c": "A0126"}, {"s": "INSUMOS Y SUMINISTROS AGRICOLAS Y PECUARIOS S.A.S", "m": "287247", "c": "A0126"}, {"s": "AGROGANADERIA MRG GUADALUPE S.A.S", "m": "256312", "c": "A0126"}, {"s": "EXTRACTORA BELLA ESPERANZA LIMITADA", "m": "24717", "c": "A0126"}, {"s": "AGROPALMEIRA S.A.S", "m": "297206", "c": "A0126"}, {"s": "GUTIERREZ PABON MANUEL DE JESUS ENRIQUE", "m": "197559", "c": "A0126"}, {"s": "SERRANO DUARTE JOSE JOAQUIN", "m": "3750", "c": "A0126"}, {"s": "AGRICOLA LA SIRENA S.A.S.", "m": "146730", "c": "A0126"}, {"s": "PALMAS SAN PABLO S.A.S.", "m": "292838", "c": "A0126"}, {"s": "AGROINVERSIONES MACONDO S.A.S", "m": "233219", "c": "A0126"}, {"s": "EL PORTICO MONTERREY S.A.S.", "m": "160499", "c": "A0126"}, {"s": "C.I. PALMARES DEL MAGDALENA MEDIO S.A.S.", "m": "85610", "c": "A0126"}, {"s": "PEREZ MANRIQUE DIEGO", "m": "131017", "c": "A0126"}, {"s": "DACONTE ORTIZ RINA LUZ", "m": "163337", "c": "A0126"}, {"s": "TACALOA  S.A.S.", "m": "97783", "c": "A0126"}, {"s": "GESTORA DE ADMINISTRACIÓN GASA S.A.S", "m": "227670", "c": "A0126"}, {"s": "INVERSIONES HERMANOS W S.A.S.", "m": "292817", "c": "A0126"}, {"s": "CASTAÑEDA MAESTRE VALENTINA MARCELA", "m": "272290", "c": "A0126"}], "BANANO": [{"s": "ACOSTA ZAMBRANO ADELA ROSA", "m": "299394", "c": "A0122"}, {"s": "AGRICOLAS TRAVECEDO Y TAMARA & CIA. SOCIEDAD EN COMANDITA SIMPLE", "m": "92434", "c": "A0122"}, {"s": "CARBONO JULIO ELVIRA ISABEL", "m": "295953", "c": "A0122"}, {"s": "BABRIN S.A.S.", "m": "246842", "c": "A0122"}, {"s": "LOPEZ MARTINEZ JULIO DAVID", "m": "295714", "c": "A0122"}, {"s": "COMPAÑIA BANANERA S.A.S", "m": "70350", "c": "A0122"}, {"s": "SAFTIG AGRICOLA S.A.S.", "m": "213954", "c": "A0122"}, {"s": "MARTINEZ BONETT RAFAEL ANTONIO", "m": "295965", "c": "A0122"}, {"s": "INVERSIONES AGRICOLAS MONTEROSSO S.A.S.", "m": "244250", "c": "A0122"}, {"s": "INVERSIONES R P D S.A.S.", "m": "164504", "c": "A0122"}, {"s": "AGROGRUPO JIMENEZ S.A.S", "m": "296117", "c": "A0122"}, {"s": "BANANERAS DEL MAGDALENA S.A.S.", "m": "247376", "c": "A0122"}, {"s": "CASTRO BERRIO JOSE MOISES", "m": "295746", "c": "A0122"}, {"s": "BANANERA DON MARCE S.A.S.", "m": "89722", "c": "A0122"}, {"s": "FEDERICA S.A.S.", "m": "92022", "c": "A0122"}, {"s": "AGROINVERSIONES C&M S.A.S", "m": "294402", "c": "A0122"}, {"s": "AVILA DURAN CARLOS ENRIQUE", "m": "48324", "c": "A0122"}, {"s": "MAYA BELL Y CIA S. EN C.", "m": "51225", "c": "A0122"}, {"s": "AGROMUSAMA S.A.S", "m": "276513", "c": "A0122"}, {"s": "DE LAS SALAS GONZALEZ GINA MARGARITA", "m": "55650", "c": "A0122"}, {"s": "SERGE RODRIGUEZ FARITH FABIAN", "m": "295710", "c": "A0122"}, {"s": "RODRIGUEZ RUA FRED WILLIAM", "m": "295955", "c": "A0122"}, {"s": "BANANERA EL RUBI S.A.S.", "m": "181368", "c": "A0122"}, {"s": "AGROGOSPA S.A.S.", "m": "238751", "c": "A0122"}, {"s": "BANAFRIOS S.A.S.", "m": "249177", "c": "A0122"}, {"s": "SOCIEDAD AGRICOLA YADIRA S.A.S.", "m": "223232", "c": "A0122"}, {"s": "C.I. LA SAMARIA ORGANIC FAIR TRADE S.A.S.", "m": "100056", "c": "A0122"}, {"s": "PEINADO RODRIGUEZ FRANCISCO", "m": "295713", "c": "A0122"}, {"s": "PEREIRA POMARICO CLARA ELISA", "m": "287137", "c": "A0122"}, {"s": "QUINTERO GOMEZ GUSTAVO RAUL", "m": "295741", "c": "A0122"}], "CAFE": [{"s": "MAZO GARCIA LUDITES", "m": "287963", "c": "A0123"}, {"s": "INVERSIONES J&H S.A.S.", "m": "213693", "c": "A0123"}, {"s": "SERRANERO SAS ZOMAC", "m": "285667", "c": "A0123"}, {"s": "COFFI SIERRA CAFE S.A.S.", "m": "301513", "c": "A0123"}, {"s": "NEVADA CROWN SAS", "m": "296357", "c": "A0123"}, {"s": "CARAT PROPERTIES S.A.S", "m": "206102", "c": "A0123"}, {"s": "DIAZ GRANADOS SAADE ANDRES EDUARDO", "m": "248988", "c": "A0123"}, {"s": "QUINTERO HERNANDEZ MARTIN DARWIN", "m": "154591", "c": "A0123"}, {"s": "KELLY JOHANA GONZALEZ LONDOÑO", "m": "255263", "c": "A0123"}, {"s": "LUIS ERNESTO VEGA BALAGUERA", "m": "244612", "c": "A0123"}, {"s": "SANJUAN PEREZ LAURA MILENA", "m": "283712", "c": "A0123"}, {"s": "HERNANDEZ RUBIO RICARDO ARTURO", "m": "223915", "c": "A0123"}, {"s": "LA PAULINA SM S.A.S", "m": "302051", "c": "A0123"}, {"s": "SIERRA AGROPECUARIA BUENAVISTA S.A.S.", "m": "259348", "c": "A0123"}, {"s": "BALMACIDA ALVAREZ MARIA ANGELICA", "m": "195343", "c": "A0123"}, {"s": "POUR OVER COFFEE EXPORTER S.A.S.", "m": "286317", "c": "A0123"}, {"s": "INVER SEBASTOPOL S.A.S.", "m": "286679", "c": "A0123"}, {"s": "ARIAS GALINDO RUBEN GONZALO", "m": "178359", "c": "A0123"}, {"s": "INVITO CAFÉ S.A.S.", "m": "260934", "c": "A0123"}, {"s": "QUE PODER MI LANZA S.A.S.", "m": "236913", "c": "A0123"}, {"s": "JOSE EDWIN MAYORQUIN CASTRO", "m": "253708", "c": "A0123"}, {"s": "CAFÉ DEL SEVILLA S.A.S", "m": "300850", "c": "A0123"}, {"s": "CUATRO AVENTUREROS SAS", "m": "282337", "c": "A0123"}, {"s": "CARDONA RODRIGUEZ WILSON JAVIER", "m": "206341", "c": "A0123"}, {"s": "CASTILLO BARRANCO ALEJANDRO", "m": "228019", "c": "A0123"}, {"s": "INVERSIONES CIVE S.A.S", "m": "266572", "c": "A0123"}, {"s": "BECERRA SANJUAN IVAN", "m": "287564", "c": "A0123"}, {"s": "PERLA ROJA  S.A.S.", "m": "269323", "c": "A0123"}, {"s": "TOVAR CASAS JAVIER MAURICIO", "m": "78837", "c": "A0123"}, {"s": "BRAYAN CAMILO RODRIGUEZ VELASQUEZ", "m": "287798", "c": "A0123"}]};
 const MUNICIPIO_CONTEO = {"SANTA MARTA": 7800, "CIÉNAGA": 536, "FUNDACION": 273, "EL BANCO": 267, "PLATO": 204, "ZONA BANANERA": 163, "ARACATACA": 111, "PIVIJAY": 89, "ARIGUANÍ": 86, "GUAMAL": 65, "SAN SEBASTIAN DE BUENAVISTA": 56, "SANTA ANA": 56, "CHIBOLO": 47, "NUEVA GRANADA": 34, "EL RETEN": 29};
 const CLUSTER_CONTEO = {"LOGISTICA": 245, "CACAO": 4, "YUCA": 14, "TURISMO": 245, "MANGO": 52, "PALMADEACEITE": 147, "BANANO": 245, "CAFE": 48};
-const TOTAL_REGISTRADOS = 500;
+const TOTAL_REGISTRADOS = 10000;
 
 
 
-// ==================== STORAGE ====================
-const STORAGE_KEY = "rutac_users_v3";
-const CURRENT_KEY = "rutac_current_user_v3";
-
-const loadUsers = () => {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch { return {}; }
-};
-const saveUsers = (u) => localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
-const loadCurrent = () => {
-  try { return JSON.parse(localStorage.getItem(CURRENT_KEY)); } catch { return null; }
-};
-const saveCurrent = (u) => localStorage.setItem(CURRENT_KEY, JSON.stringify(u));
-const clearCurrent = () => localStorage.removeItem(CURRENT_KEY);
-
+// ==================== STORAGE (Supabase) ====================
 const ADMIN_EMAIL = "camara@rutac.gov.co";
-const ADMIN_PASS = "Camara2026!";
+
+// Helpers de sesión local (solo para caché UI, la verdad está en Supabase)
+const saveCurrent = (u) => localStorage.setItem("rutac_session_cache", JSON.stringify(u));
+const loadCurrent = () => { try { return JSON.parse(localStorage.getItem("rutac_session_cache")); } catch { return null; } };
+const clearCurrent = () => localStorage.removeItem("rutac_session_cache");
+
+// Compatibilidad con admin panel (lee perfiles de Supabase)
+const loadUsers = () => { try { return JSON.parse(localStorage.getItem("rutac_users_v3") || "{}"); } catch { return {}; } };
 
 // ==================== HELPERS ====================
 function getInitials(name = "") {
@@ -161,20 +156,35 @@ function LoginPage({ onLogin, onRegister }) {
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!email || !pass) { setErr("Completa todos los campos"); return; }
-    if (email.toLowerCase().trim() === ADMIN_EMAIL && pass === ADMIN_PASS) {
-      const admin = { email: ADMIN_EMAIL, role: "admin", razonSocial: "Cámara de Comercio de Santa Marta" };
-      saveCurrent(admin); onLogin(admin); return;
-    }
-    const users = loadUsers();
-    const user = users[email.toLowerCase().trim()];
-    if (user && user.password === pass) {
-      saveCurrent(user); onLogin(user);
-    } else {
+    setLoading(true);
+    setErr("");
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.toLowerCase().trim(),
+      password: pass,
+    });
+
+    if (error) {
       setErr("Correo o contraseña incorrectos");
+      setLoading(false);
+      return;
     }
+
+    // Fetch perfil del usuario
+    const { data: perfil } = await supabase
+      .from("perfiles")
+      .select("*")
+      .eq("id", data.user.id)
+      .single();
+
+    const user = { ...perfil, email: data.user.email };
+    saveCurrent(user);
+    onLogin(user);
+    setLoading(false);
   };
 
   return (
@@ -210,16 +220,16 @@ function LoginPage({ onLogin, onRegister }) {
             <div style={{ position: "relative" }}>
               <svg style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
               <input type="password" value={pass} onChange={e => { setPass(e.target.value); setErr(""); }}
-                placeholder="Mínimo 6 caracteres" style={{ ...base.input, paddingLeft: 40 }}
+                placeholder="Mínimo 8 caracteres" style={{ ...base.input, paddingLeft: 40 }}
                 onKeyDown={e => e.key === "Enter" && handleLogin()} />
             </div>
           </div>
           {err && <p style={{ color: "#D85A30", fontSize: 12, marginBottom: 12, textAlign: "center" }}>{err}</p>}
-          <button onClick={handleLogin} style={{
-            width: "100%", padding: "14px", background: "#0F9B8E", color: "#fff",
+          <button onClick={handleLogin} disabled={loading} style={{
+            width: "100%", padding: "14px", background: loading ? "#aaa" : "#0F9B8E", color: "#fff",
             border: "none", borderRadius: 12, fontWeight: 700, fontSize: 16,
-            cursor: "pointer", fontFamily: base.fontFamily
-          }}>Entrar →</button>
+            cursor: loading ? "not-allowed" : "pointer", fontFamily: base.fontFamily
+          }}>{loading ? "Entrando..." : "Entrar →"}</button>
           <p style={{ textAlign: "center", marginTop: 20, fontSize: 14, color: "#555" }}>
             ¿Aún no tienes cuenta?{" "}
             <span onClick={onRegister} style={{ color: "#0F9B8E", cursor: "pointer", fontWeight: 600 }}>Regístrate gratis</span>
@@ -234,11 +244,12 @@ function LoginPage({ onLogin, onRegister }) {
 function RegisterPage({ onDone, onLogin }) {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
-    razonSocial: "", registradoCamara: "", sector: "", tiempoOperando: "", descripcion: "",
+    razonSocial: "", registradoCamara: "", nit: "", sector: "", tiempoOperando: "", descripcion: "",
     municipio: "Santa Marta", barrio: "", whatsapp: "", email: "", password: "", confirm: ""
   });
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
+  const [loading, setLoading] = useState(false);
 
   const update = (k, v) => {
     setForm(f => ({ ...f, [k]: v }));
@@ -251,6 +262,7 @@ function RegisterPage({ onDone, onLogin }) {
     if (step === 1) {
       if (!form.razonSocial.trim()) e.razonSocial = "El nombre del negocio es obligatorio";
       if (!form.registradoCamara) e.registradoCamara = "Selecciona una opción";
+      if (form.registradoCamara === "si" && !form.nit.trim()) e.nit = "El NIT es obligatorio para empresas registradas";
       if (!form.sector) e.sector = "Selecciona un sector";
       if (!form.tiempoOperando) e.tiempoOperando = "Selecciona un rango";
     }
@@ -270,29 +282,75 @@ function RegisterPage({ onDone, onLogin }) {
     return Object.keys(e).length === 0;
   };
 
-  const next = () => {
+  const next = async () => {
     if (!validateStep()) return;
     if (step === 4) {
-      const users = loadUsers();
-      if (users[form.email.toLowerCase().trim()]) {
-        setErrors({ email: "Ya existe una cuenta con este correo" });
+      setLoading(true);
+      const emailClean = form.email.toLowerCase().trim();
+
+      // 1. Crear usuario en Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: emailClean,
+        password: form.password,
+        options: {
+          data: { razon_social: form.razonSocial, role: "user" }
+        }
+      });
+
+      if (authError) {
+        if (authError.message.includes("already registered")) {
+          setErrors({ email: "Ya existe una cuenta con este correo" });
+        } else {
+          setErrors({ email: authError.message });
+        }
+        setLoading(false);
         return;
       }
+
+      // 2. Actualizar el perfil con todos los datos del formulario
+      const matricula = "R" + Date.now().toString().slice(-6);
+      const { error: profileError } = await supabase
+        .from("perfiles")
+        .update({
+          razon_social: form.razonSocial,
+          nit: form.nit || null,
+          cluster: form.sector,
+          etapa: "Inicio",
+          municipio: form.municipio,
+          barrio: form.barrio,
+          whatsapp: form.whatsapp,
+          descripcion: form.descripcion,
+          tiempo_operando: form.tiempoOperando,
+          registrado_camara: form.registradoCamara,
+          completitud: 70,
+          matricula: matricula,
+          role: "user",
+        })
+        .eq("id", authData.user.id);
+
+      if (profileError) {
+        console.error("Error perfil:", profileError);
+      }
+
       const newUser = {
-        ...form,
-        email: form.email.toLowerCase().trim(),
-        id: Date.now().toString(),
-        role: "user",
+        id: authData.user.id,
+        email: emailClean,
+        razon_social: form.razonSocial,
+        razonSocial: form.razonSocial,
         cluster: form.sector,
         etapa: "Inicio",
+        municipio: form.municipio,
+        barrio: form.barrio,
+        whatsapp: form.whatsapp,
+        descripcion: form.descripcion,
+        nit: form.nit,
+        matricula,
+        role: "user",
         completitud: 70,
-        matricula: "R" + Date.now().toString().slice(-6),
-        createdAt: new Date().toISOString(),
       };
-      delete newUser.confirm;
-      users[newUser.email] = newUser;
-      saveUsers(users);
+
       saveCurrent(newUser);
+      setLoading(false);
       onDone(newUser);
     } else {
       setStep(s => s + 1);
@@ -395,6 +453,18 @@ function RegisterPage({ onDone, onLogin }) {
                 </div>
               </Field>
 
+              {form.registradoCamara === "si" && (
+                <Field label="NIT *" error={errors.nit}>
+                  <input
+                    value={form.nit}
+                    onChange={e => update("nit", e.target.value.replace(/[^0-9\-]/g, ""))}
+                    placeholder="800170340-1"
+                    style={errors.nit ? base.inputError : base.input}
+                  />
+                  <span style={{ fontSize: 12, color: "#888" }}>Número de Identificación Tributaria de tu empresa</span>
+                </Field>
+              )}
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <Field label="Sector *" error={errors.sector}>
                   <select value={form.sector} onChange={e => update("sector", e.target.value)}
@@ -470,6 +540,7 @@ function RegisterPage({ onDone, onLogin }) {
               <ReviewSection title="Tu negocio" onEdit={() => setStep(1)} rows={[
                 ["NOMBRE DEL NEGOCIO", form.razonSocial],
                 ["¿ESTÁS REGISTRADO EN LA CÁMARA DE COMERCIO?", form.registradoCamara === "si" ? "Sí, ya estoy registrado" : "No, todavía no"],
+                ...(form.registradoCamara === "si" ? [["NIT", form.nit]] : []),
                 ["SECTOR", form.sector],
                 ["¿HACE CUÁNTO TIEMPO OPERAS?", form.tiempoOperando],
                 ["CUÉNTANOS QUÉ HACES", form.descripcion],
@@ -513,8 +584,8 @@ function RegisterPage({ onDone, onLogin }) {
 
           <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
             {step > 1 && <Btn variant="ghost" onClick={() => setStep(s => s - 1)}>← Atrás</Btn>}
-            <Btn full onClick={next}>
-              {step === 4 ? "Crear mi perfil" : "Continuar →"}
+            <Btn full onClick={next} disabled={loading}>
+              {step === 4 ? (loading ? "Creando cuenta..." : "Crear mi perfil") : "Continuar →"}
             </Btn>
           </div>
         </div>
@@ -981,12 +1052,30 @@ function MiNegocioPage({ user, setUserGlobal }) {
     return Object.keys(e).length === 0;
   };
 
-  const save = () => {
+  const save = async () => {
     if (!validate()) return;
-    const users = loadUsers();
-    const updated = { ...form };
-    users[user.email] = updated;
-    saveUsers(users);
+    const { error } = await supabase
+      .from("perfiles")
+      .update({
+        razon_social: form.razonSocial || form.razon_social,
+        cluster: form.cluster,
+        etapa: form.etapa,
+        municipio: form.municipio,
+        barrio: form.barrio,
+        whatsapp: form.whatsapp,
+        descripcion: form.descripcion,
+        tiempo_operando: form.tiempoOperando,
+        nit: form.nit,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", user.id);
+
+    if (error) {
+      console.error("Error guardando perfil:", error);
+      return;
+    }
+
+    const updated = { ...form, razonSocial: form.razonSocial || form.razon_social };
     saveCurrent(updated);
     setUserGlobal(updated);
     setEditing(false);
@@ -1562,19 +1651,56 @@ export default function App() {
   const [page, setPage] = useState("Inicio");
 
   useEffect(() => {
-    const saved = loadCurrent();
-    if (saved?.email) {
-      setUser(saved);
-      setScreen("app");
-    } else {
-      setScreen("login");
-    }
+    // Check active Supabase session on mount
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        const { data: perfil } = await supabase
+          .from("perfiles")
+          .select("*")
+          .eq("id", session.user.id)
+          .single();
+        const u = { ...perfil, email: session.user.email, razonSocial: perfil?.razon_social };
+        setUser(u);
+        saveCurrent(u);
+        setScreen("app");
+      } else {
+        setScreen("login");
+      }
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_OUT") {
+        clearCurrent();
+        setUser(null);
+        setScreen("login");
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const login = (u) => { setUser(u); setScreen("app"); setPage("Inicio"); };
-  const logout = () => { clearCurrent(); setUser(null); setScreen("login"); };
+  const login = (u) => {
+    // Normalize field names (Supabase uses snake_case)
+    const normalized = { ...u, razonSocial: u.razonSocial || u.razon_social };
+    setUser(normalized);
+    saveCurrent(normalized);
+    setScreen("app");
+    setPage("Inicio");
+  };
 
-  if (screen === "loading") return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: base.fontFamily, color: "#888" }}>Cargando...</div>;
+  const logout = async () => {
+    await supabase.auth.signOut();
+    clearCurrent();
+    setUser(null);
+    setScreen("login");
+  };
+
+  if (screen === "loading") return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: base.fontFamily, color: "#888" }}>
+      Cargando...
+    </div>
+  );
   if (screen === "login") return <LoginPage onLogin={login} onRegister={() => setScreen("register")} />;
   if (screen === "register") return <RegisterPage onDone={login} onLogin={() => setScreen("login")} />;
 
