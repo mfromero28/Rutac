@@ -181,7 +181,12 @@ function LoginPage({ onLogin, onRegister, darkMode, onToggleDark }) {
       .eq("id", data.user.id)
       .single();
 
-    const user = { ...perfil, email: data.user.email };
+    const user = {
+      ...perfil,
+      email: data.user.email,
+      razonSocial: perfil?.razon_social || perfil?.razonSocial || data.user.user_metadata?.razon_social || "Usuario",
+      role: perfil?.role || data.user.user_metadata?.role || "user",
+    };
     saveCurrent(user);
     onLogin(user);
     setLoading(false);
@@ -341,7 +346,15 @@ function RegisterPage({ onDone, onLogin }) {
         console.error("Error perfil:", profileError.message);
       }
 
+      // Re-fetch the profile to get the latest data from Supabase
+      const { data: freshProfile } = await supabase
+        .from("perfiles")
+        .select("*")
+        .eq("id", authData.user.id)
+        .single();
+
       const newUser = {
+        ...(freshProfile || {}),
         id: authData.user.id,
         email: emailClean,
         razon_social: form.razonSocial,
@@ -352,7 +365,7 @@ function RegisterPage({ onDone, onLogin }) {
         barrio: form.barrio,
         whatsapp: form.whatsapp,
         descripcion: form.descripcion,
-        nit: form.nit,
+        nit: form.nit || null,
         matricula,
         role: "user",
         completitud: 70,
@@ -1069,17 +1082,35 @@ function MiClusterPage({ user }) {
 // ==================== CONEXIONES ====================
 function ConexionesPage({ user }) {
   const [selectedConn, setSelectedConn] = useState(null);
+  const [connTab, setConnTab] = useState("todas");
   const [connections, setConnections] = useState([
-    { initials: "HC", name: "Hotel Casa Bambú", sub: `${user.cluster || "Turismo"} · El Rodadero`, tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Hoy", badge: "green", suggestion: "Confirma con ellos el cruce de huéspedes para el puente festivo.", messages: 3, whatsapp: "3158709635" },
-    { initials: "CT", name: "Caribe Travel Co.", sub: "Agencia de turismo receptivo · Centro", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 3 días", badge: "red", suggestion: "Envía la cotización para el grupo de 10.", messages: 1, whatsapp: "3142345678" },
-    { initials: "DL", name: "Doña Lucía", sub: "Lavandería a domicilio · Bastidas", tipo: "Proveedor", status: "Pendiente", lastInteraction: "Hace 5 días", badge: "yellow", suggestion: "Acepta la solicitud de conexión pendiente.", messages: 0, whatsapp: "3104567890" },
+    { initials: "HC", name: "Hotel Casa Bambú", sub: "Turismo · El Rodadero", tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Hoy", suggestion: "Confirma con ellos el cruce de huéspedes para el puente festivo.", messages: 5, whatsapp: "3158709001" },
+    { initials: "CT", name: "Caribe Travel Co.", sub: "Turismo · Centro Histórico", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 2 días", suggestion: "Envía la cotización para el grupo de 10 turistas.", messages: 3, whatsapp: "3142345001" },
+    { initials: "DL", name: "Doña Lucía Lavandería", sub: "Comercio y Servicios · Bastidas", tipo: "Proveedor", status: "Activa", lastInteraction: "Ayer", suggestion: "Confirma la recogida de lunes y miércoles.", messages: 2, whatsapp: "3104567001" },
+    { initials: "BG", name: "Bananera González & Hijos", sub: "Banano · Zona Bananera", tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Hace 4 días", suggestion: "Pregúntales sobre la certificación Rainforest Alliance.", messages: 1, whatsapp: "3174567001" },
+    { initials: "TC", name: "Transportes Caribe Norte", sub: "Logística · Mamatoco", tipo: "Proveedor", status: "Activa", lastInteraction: "Hace 1 semana", suggestion: "Negocia tarifa especial para envíos semanales.", messages: 4, whatsapp: "3196789001" },
+    { initials: "ZM", name: "ZAKU MOCHILAS", sub: "Artesanías · Mamatoco", tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Hace 3 días", suggestion: "Propónles paquete de souvenirs para tus huéspedes.", messages: 2, whatsapp: "3158709635" },
+    { initials: "TS", name: "Tour Sierra Nevada SAS", sub: "Turismo · Taganga", tipo: "Cliente potencial", status: "Pendiente", lastInteraction: "Hace 6 días", suggestion: "Responde la solicitud de conexión que enviaron.", messages: 0, whatsapp: "3185678001" },
+    { initials: "PE", name: "Pescadería El Mocho", sub: "Pesca y Acuicultura · Pescaíto", tipo: "Proveedor", status: "Pendiente", lastInteraction: "Hace 1 semana", suggestion: "Ideal para proveer mariscos frescos a tu negocio.", messages: 0, whatsapp: "3142345678" },
+    { initials: "CS", name: "Café Sierra Nevada Orgánico", sub: "Café · Aracataca", tipo: "Referente", status: "Activa", lastInteraction: "Hace 5 días", suggestion: "Incluye su café en tu oferta gastronómica.", messages: 1, whatsapp: "3118901001" },
+    { initials: "PM", name: "Palmeras del Magdalena SAS", sub: "Palma de Aceite · El Retén", tipo: "Referente", status: "Pausada", lastInteraction: "Hace 3 semanas", suggestion: "Retoma el contacto, tienen nueva cosecha disponible.", messages: 0, whatsapp: "3107890001" },
+    { initials: "AB", name: "Artesanías Bahía", sub: "Artesanías · Taganga", tipo: "Aliado estratégico", status: "Pausada", lastInteraction: "Hace 2 semanas", suggestion: "Reactiva la alianza para temporada alta.", messages: 0, whatsapp: "3152345001" },
+    { initials: "RC", name: "Restaurante El Costeño", sub: "Comercio y Servicios · El Rodadero", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Ayer", suggestion: "Envíales propuesta de suministro mensual.", messages: 3, whatsapp: "3163456001" },
+    { initials: "MA", name: "Mar Azul Boutique Hotel", sub: "Turismo · El Rodadero", tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Hoy", suggestion: "Coordinen el cruce de clientes para temporada.", messages: 6, whatsapp: "3174567002" },
+    { initials: "SN", name: "Hostal Sierra Nevada", sub: "Turismo · Bavaria", tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Hace 2 días", suggestion: "Propuesta de paquete conjunto está pendiente.", messages: 2, whatsapp: "3185678002" },
+    { initials: "AG", name: "Agro Guamal SAS", sub: "Banano · Guamal", tipo: "Proveedor", status: "Pendiente", lastInteraction: "Hace 8 días", suggestion: "Solicitud de conexión sin respuesta.", messages: 0, whatsapp: "3196789002" },
+    { initials: "VT", name: "Viajes y Turismo Tayrona", sub: "Turismo · Centro", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 3 días", suggestion: "Tienen grupo de 25 personas para dic.", messages: 2, whatsapp: "3107890002" },
+    { initials: "LC", name: "Lavandería Caribe Express", sub: "Comercio y Servicios · Gaira", tipo: "Proveedor", status: "Archivada", lastInteraction: "Hace 2 meses", suggestion: "Conexión archivada. Puedes reactivarla.", messages: 0, whatsapp: "3118901002" },
+    { initials: "FP", name: "Finca La Primavera", sub: "Palma de Aceite · Zona Bananera", tipo: "Aliado estratégico", status: "Archivada", lastInteraction: "Hace 1 mes", suggestion: "Conexión archivada. Puedes reactivarla.", messages: 0, whatsapp: "3129012001" },
+    { initials: "DD", name: "Distribuidora Del Mar", sub: "Pesca y Acuicultura · Santa Marta", tipo: "Proveedor", status: "Activa", lastInteraction: "Hace 4 días", suggestion: "Cotiza el paquete semanal de mariscos frescos.", messages: 1, whatsapp: "3140123001" },
+    { initials: "EX", name: "Experiencias Caribe SAS", sub: "Turismo · Bello Horizonte", tipo: "Cliente potencial", status: "Pendiente", lastInteraction: "Hace 5 días", suggestion: "Interesados en tu propuesta de turismo rural.", messages: 0, whatsapp: "3151234001" },
   ]);
 
   const stats = [
-    { val: 3, label: "Activas", color: "#4CAF50" },
-    { val: 2, label: "Pendientes", color: "#FF9800" },
-    { val: 1, label: "En pausa", color: "#9E9E9E" },
-    { val: 1, label: "Archivadas", color: "#607D8B" },
+    { val: connections.filter(c => c.status === "Activa").length, label: "Activas", color: "#4CAF50" },
+    { val: connections.filter(c => c.status === "Pendiente").length, label: "Pendientes", color: "#FF9800" },
+    { val: connections.filter(c => c.status === "Pausada").length, label: "En pausa", color: "#9E9E9E" },
+    { val: connections.filter(c => c.status === "Archivada").length, label: "Archivadas", color: "#607D8B" },
   ];
 
   const tipoColor = { "Aliado estratégico": "#0F9B8E", "Cliente potencial": "#185FA5", "Proveedor": "#BA7517" };
@@ -1087,7 +1118,7 @@ function ConexionesPage({ user }) {
   return (
     <div style={{ padding: "2rem", maxWidth: 900, margin: "0 auto" }}>
       <h1 style={{ fontSize: 26, marginBottom: 4 }}>Mis conexiones</h1>
-      <p style={{ color: "#666", fontSize: 14, marginBottom: 20 }}>{connections.length} negocios en tu red</p>
+      <p style={{ color: "#666", fontSize: 14, marginBottom: 20 }}>{connections.length} negocios en tu red · mostrando {connTab === "todas" ? connections.length : connections.filter(c => c.status === connTab).length}</p>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 24 }}>
         {stats.map(s => (
@@ -1103,16 +1134,28 @@ function ConexionesPage({ user }) {
         ))}
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        {["Todas 7", "Activas 3", "Pendientes 2", "En pausa 1", "Archivadas"].map(t => (
-          <button key={t} style={{ background: t.startsWith("Todas") ? "#0F9B8E" : "#fff", color: t.startsWith("Todas") ? "#fff" : "#555", border: "1.5px solid", borderColor: t.startsWith("Todas") ? "#0F9B8E" : "#D8DDE5", borderRadius: 20, padding: "6px 14px", fontSize: 13, cursor: "pointer", fontFamily: base.fontFamily }}>
-            {t}
-          </button>
-        ))}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        {[
+          { label: "Todas", filter: "todas" },
+          { label: `Activas ${connections.filter(c => c.status === "Activa").length}`, filter: "Activa" },
+          { label: `Pendientes ${connections.filter(c => c.status === "Pendiente").length}`, filter: "Pendiente" },
+          { label: `En pausa ${connections.filter(c => c.status === "Pausada").length}`, filter: "Pausada" },
+          { label: "Archivadas", filter: "Archivada" },
+        ].map(t => {
+          const active = connTab === t.filter;
+          return (
+            <button key={t.filter} onClick={() => setConnTab(t.filter)} style={{
+              background: active ? "#0F9B8E" : "#fff",
+              color: active ? "#fff" : "#555",
+              border: "1.5px solid", borderColor: active ? "#0F9B8E" : "#D8DDE5",
+              borderRadius: 20, padding: "6px 14px", fontSize: 13, cursor: "pointer", fontFamily: base.fontFamily, fontWeight: active ? 600 : 400
+            }}>{t.label}</button>
+          );
+        })}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {connections.map(c => (
+        {connections.filter(c => connTab === "todas" || c.status === connTab).map(c => (
           <div key={c.initials} style={{ background: "#fff", borderRadius: 14, padding: "1.25rem 1.5rem", border: "1px solid #EAEAEA" }}>
             <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
               <Avatar name={c.initials} size={40} color={tipoColor[c.tipo] || "#0F9B8E"} />
@@ -1405,6 +1448,10 @@ function MiNegocioPage({ user, setUserGlobal }) {
               <Field label="Nombre / Razón Social *" error={errors.razonSocial}>
                 <input value={form.razonSocial || ""} onChange={e => update("razonSocial", e.target.value)} style={errors.razonSocial ? base.inputError : base.input} />
               </Field>
+              <Field label="NIT" error={errors.nit}>
+                <input value={form.nit || ""} onChange={e => update("nit", e.target.value.replace(/[^0-9\-]/g, ""))} placeholder="800170340-1" style={errors.nit ? base.inputError : base.input} />
+                <span style={{ fontSize: 12, color: "#888" }}>Número de Identificación Tributaria (opcional si eres informal)</span>
+              </Field>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <Field label="Clúster / Sector">
                   <select value={form.cluster || ""} onChange={e => update("cluster", e.target.value)} style={base.input}>
@@ -1633,20 +1680,31 @@ function MarketplacePage({ user }) {
 }
 
 // ==================== ADMIN DASHBOARD ====================
-function AdminDashboard({ onLogout }) {
+function AdminDashboard({ onLogout, user }) {
   const [page, setPage] = useState("Dashboard");
   const [search, setSearch] = useState("");
   const [clusterFilter, setClusterFilter] = useState("");
+  const [supaUsers, setSupaUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
 
-  // Merge localStorage users with real CSV sample
+  // Load real users from Supabase
+  useEffect(() => {
+    supabase.from("perfiles").select("*").order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) setSupaUsers(data);
+        setLoadingUsers(false);
+      });
+  }, []);
+
   const lsUsers = Object.values(loadUsers());
   const csvRows = REGISTRADOS_MUESTRA.map(r => ({
-    razonSocial: r.s, municipio: r.mu, ciiu: r.ci, nit: r.ni,
-    matricula: r.ma, email: r.em, telefono: r.te, tipoOrg: r.to, estado: r.es,
-    cluster: "", etapa: ""
+    razon_social: r.s, municipio: r.mu, ciiu: r.ci, nit: r.ni,
+    matricula: r.ma, email: r.em, telefono: r.te, tipoOrg: r.to, estado: r.es, cluster: "",
   }));
-  const allEmpresas = [...lsUsers, ...csvRows];
-  const totalEmpresas = TOTAL_REGISTRADOS;
+
+  // Combined: Supabase users (real) + CSV sample
+  const allEmpresas = [...supaUsers, ...csvRows];
+  const totalRegistrados = TOTAL_REGISTRADOS;
 
   const clusterList = [
     { id: "TURISMO", titulo: "Turismo", color: "#0F9B8E", bgLight: "#E1F5EE", total: CLUSTER_CONTEO.TURISMO || 245 },
@@ -1659,298 +1717,417 @@ function AdminDashboard({ onLogout }) {
     { id: "YUCA", titulo: "Yuca", color: "#558B2F", bgLight: "#F1F8E9", total: CLUSTER_CONTEO.YUCA || 14 },
   ];
 
-  const filtered = allEmpresas.filter(u => {
+  const etapaColors = {
+    "Ideación": "#9C27B0", "Inicio": "#0F9B8E", "Crecimiento": "#4CAF50",
+    "Consolidación": "#185FA5", "Madurez": "#FF9800", "Expansión": "#D85A30"
+  };
+
+  // Stats from real Supabase users
+  const realUserCount = supaUsers.filter(u => u.role !== "admin").length;
+  const clusterCountReal = clusterList.reduce((acc, c) => {
+    acc[c.titulo] = supaUsers.filter(u => u.cluster === c.titulo).length;
+    return acc;
+  }, {});
+  const etapaCountReal = ETAPAS.reduce((acc, e) => {
+    acc[e] = supaUsers.filter(u => u.etapa === e).length;
+    return acc;
+  }, {});
+  const muniData = Object.entries(MUNICIPIO_CONTEO).slice(0, 10);
+  const maxMuni = Math.max(...muniData.map(([,v]) => v));
+
+  // Filter for empresa table
+  const filteredEmpresas = allEmpresas.filter(u => {
     const q = search.toLowerCase();
-    const matchSearch = !q || (u.razonSocial?.toLowerCase().includes(q) || u.municipio?.toLowerCase().includes(q) || u.nit?.toLowerCase().includes(q) || u.matricula?.toLowerCase().includes(q));
+    const name = (u.razon_social || u.razonSocial || "").toLowerCase();
+    const muni = (u.municipio || "").toLowerCase();
+    const nit = (u.nit || "").toLowerCase();
+    const matchSearch = !q || name.includes(q) || muni.includes(q) || nit.includes(q);
     const matchCluster = !clusterFilter || u.cluster === clusterFilter;
     return matchSearch && matchCluster;
   });
 
-  const muniData = Object.entries(MUNICIPIO_CONTEO).slice(0, 8);
-  const maxMuni = Math.max(...muniData.map(([,v]) => v));
-
-  const navItems = ["Dashboard", "Empresas", "Clusters", "Reportes"];
+  const navItems = ["Dashboard", "Emprendedores", "Empresas SII", "Clusters", "Reportes"];
 
   return (
-    <div style={{ fontFamily: base.fontFamily, minHeight: "100vh", background: "#F5F7FA" }}>
-      <nav style={{ background: "#fff", borderBottom: "1px solid #EAEAEA", padding: "0 2rem", display: "flex", alignItems: "center", gap: "1.5rem", height: 58, position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 7, background: "#0F9B8E", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, fontSize: 16 }}>C</div>
-          <span style={{ fontWeight: 700, fontSize: 17 }}>Ruta <span style={{ color: "#0F9B8E" }}>C</span> · Admin</span>
-        </div>
-        {navItems.map(p => (
-          <button key={p} onClick={() => setPage(p)} style={{
-            background: "none", border: "none", fontWeight: page === p ? 600 : 400,
-            color: page === p ? "#0F9B8E" : "#555", fontSize: 14,
-            borderBottom: page === p ? "2px solid #0F9B8E" : "2px solid transparent",
-            padding: "20px 2px", cursor: "pointer", fontFamily: base.fontFamily
-          }}>{p}</button>
-        ))}
-        <div style={{ marginLeft: "auto" }}>
-          <Btn variant="ghost" small onClick={onLogout}>Salir</Btn>
-        </div>
-      </nav>
+    <div style={{ fontFamily: base.fontFamily, minHeight: "100vh", background: "#F0F4F8" }}>
 
-      <div style={{ padding: "2rem", maxWidth: 1200, margin: "0 auto" }}>
+      {/* Sidebar + top nav layout */}
+      <div style={{ display: "flex", minHeight: "100vh" }}>
 
-        {/* ===== DASHBOARD ===== */}
-        {page === "Dashboard" && (
-          <>
-            <h1 style={{ fontSize: 24, margin: "0 0 4px" }}>Dashboard Cámara de Comercio</h1>
-            <p style={{ color: "#666", fontSize: 14, marginBottom: 24 }}>Cámara de Comercio de Santa Marta · Vista de gestión</p>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 24 }}>
-              {[
-                { val: totalEmpresas.toLocaleString(), label: "Empresas registradas", color: "#0F9B8E" },
-                { val: clusterList.length, label: "Clústeres activos", color: "#185FA5" },
-                { val: Object.keys(MUNICIPIO_CONTEO).length, label: "Municipios cubiertos", color: "#BA7517" },
-                { val: (lsUsers.length + 89), label: "Nuevos este mes", color: "#4CAF50" },
-              ].map(k => (
-                <div key={k.label} style={{ ...base.card }}>
-                  <h3 style={{ fontSize: 36, color: k.color, margin: "0 0 4px", fontWeight: 800 }}>{k.val}</h3>
-                  <p style={{ margin: 0, color: "#666", fontSize: 13 }}>{k.label}</p>
-                </div>
-              ))}
+        {/* Sidebar */}
+        <aside style={{ width: 220, background: "#1A1A2E", display: "flex", flexDirection: "column", position: "fixed", height: "100vh", zIndex: 50 }}>
+          {/* Logo */}
+          <div style={{ padding: "1.5rem", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: "#0F9B8E", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, fontSize: 16 }}>C</div>
+              <div>
+                <p style={{ margin: 0, color: "#fff", fontWeight: 700, fontSize: 14 }}>Ruta C</p>
+                <p style={{ margin: 0, color: "#0F9B8E", fontSize: 11, fontWeight: 600 }}>ADMIN</p>
+              </div>
             </div>
+          </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
-              <div style={{ ...base.card }}>
-                <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>Empresas por clúster</h3>
-                {clusterList.map(c => {
-                  const pct = Math.round((c.total / 245) * 100);
-                  return (
-                    <div key={c.id} style={{ marginBottom: 12 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                        <span style={{ fontSize: 13, fontWeight: 500 }}>{c.titulo}</span>
-                        <span style={{ fontSize: 12, color: "#888" }}>{c.total.toLocaleString()} empresas</span>
-                      </div>
-                      <div style={{ height: 6, background: "#F0F0F0", borderRadius: 4 }}>
-                        <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: c.color, borderRadius: 4 }} />
-                      </div>
-                    </div>
-                  );
-                })}
+          {/* Nav items */}
+          <nav style={{ padding: "1rem 0", flex: 1 }}>
+            {[
+              { label: "Dashboard", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> },
+              { label: "Emprendedores", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
+              { label: "Empresas SII", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg> },
+              { label: "Clusters", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg> },
+              { label: "Reportes", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> },
+            ].map(item => (
+              <button key={item.label} onClick={() => setPage(item.label)} style={{
+                width: "100%", padding: "11px 20px", background: page === item.label ? "rgba(15,155,142,0.15)" : "none",
+                border: "none", borderLeft: page === item.label ? "3px solid #0F9B8E" : "3px solid transparent",
+                color: page === item.label ? "#0F9B8E" : "rgba(255,255,255,0.6)",
+                textAlign: "left", cursor: "pointer", fontSize: 14, fontFamily: base.fontFamily,
+                display: "flex", alignItems: "center", gap: 10, fontWeight: page === item.label ? 600 : 400,
+              }}>{item.icon}{item.label}</button>
+            ))}
+          </nav>
+
+          {/* User info at bottom */}
+          <div style={{ padding: "1rem 1.2rem", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+            <p style={{ margin: "0 0 2px", color: "#fff", fontSize: 13, fontWeight: 600 }}>Cámara de Comercio</p>
+            <p style={{ margin: "0 0 10px", color: "rgba(255,255,255,0.4)", fontSize: 11 }}>camara@rutac.gov.co</p>
+            <button onClick={onLogout} style={{ background: "rgba(216,90,48,0.15)", border: "1px solid rgba(216,90,48,0.3)", color: "#D85A30", borderRadius: 8, padding: "7px 14px", cursor: "pointer", fontSize: 13, fontFamily: base.fontFamily, width: "100%" }}>Cerrar sesión</button>
+          </div>
+        </aside>
+
+        {/* Main content */}
+        <main style={{ marginLeft: 220, flex: 1, padding: "2rem" }}>
+
+          {/* ===== DASHBOARD ===== */}
+          {page === "Dashboard" && (
+            <>
+              <div style={{ marginBottom: 24 }}>
+                <h1 style={{ fontSize: 24, margin: "0 0 4px", color: "#1A1A2E" }}>Dashboard de control</h1>
+                <p style={{ color: "#666", fontSize: 14, margin: 0 }}>Cámara de Comercio de Santa Marta · Ecosistema empresarial del Magdalena</p>
               </div>
 
-              <div style={{ ...base.card }}>
-                <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>Top municipios por registro</h3>
-                {muniData.map(([muni, count]) => (
-                  <div key={muni} style={{ marginBottom: 10 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                      <span style={{ fontSize: 13, fontWeight: 500 }}>{muni.charAt(0) + muni.slice(1).toLowerCase()}</span>
-                      <span style={{ fontSize: 12, color: "#888" }}>{count.toLocaleString()}</span>
-                    </div>
-                    <div style={{ height: 5, background: "#F0F0F0", borderRadius: 4 }}>
-                      <div style={{ height: "100%", width: `${Math.round((count / maxMuni) * 100)}%`, background: "#0F9B8E", borderRadius: 4 }} />
+              {/* KPI Cards */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 24 }}>
+                {[
+                  { val: totalRegistrados.toLocaleString(), label: "Empresas en SII", sub: "Registro mercantil activo", color: "#0F9B8E", icon: "🏢" },
+                  { val: realUserCount, label: "Emprendedores Ruta C", sub: "Registrados en la plataforma", color: "#185FA5", icon: "👤" },
+                  { val: clusterList.length, label: "Clústeres activos", sub: "Sectores productivos", color: "#9C27B0", icon: "🔗" },
+                  { val: Object.keys(MUNICIPIO_CONTEO).length, label: "Municipios", sub: "Con presencia empresarial", color: "#BA7517", icon: "📍" },
+                ].map(k => (
+                  <div key={k.label} style={{ background: "#fff", borderRadius: 16, padding: "1.25rem 1.5rem", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", borderLeft: `4px solid ${k.color}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div>
+                        <p style={{ margin: "0 0 4px", fontSize: 12, color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{k.label}</p>
+                        <h3 style={{ margin: "0 0 2px", fontSize: 32, fontWeight: 800, color: k.color }}>{k.val}</h3>
+                        <p style={{ margin: 0, fontSize: 12, color: "#888" }}>{k.sub}</p>
+                      </div>
+                      <span style={{ fontSize: 28 }}>{k.icon}</span>
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
 
-            <div style={{ ...base.card }}>
-              <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>Últimas empresas registradas en el sistema</h3>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead>
-                  <tr style={{ background: "#F8F9FA" }}>
-                    {["Razón Social", "Municipio", "Matrícula", "Tipo", "Estado"].map(h => (
-                      <th key={h} style={{ padding: "9px 14px", textAlign: "left", fontWeight: 600, color: "#555", fontSize: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {REGISTRADOS_MUESTRA.slice(0, 8).map((u, i) => (
-                    <tr key={i} style={{ borderTop: "1px solid #F0F0F0" }}>
-                      <td style={{ padding: "9px 14px", fontWeight: 500 }}>{u.s}</td>
-                      <td style={{ padding: "9px 14px", color: "#555" }}>{u.mu}</td>
-                      <td style={{ padding: "9px 14px", color: "#555" }}>{u.ma}</td>
-                      <td style={{ padding: "9px 14px", color: "#555", fontSize: 12 }}>{u.to}</td>
-                      <td style={{ padding: "9px 14px" }}>
-                        <span style={{ background: "#E8F5E9", color: "#4CAF50", borderRadius: 12, padding: "2px 8px", fontSize: 11, fontWeight: 600 }}>{u.es}</span>
-                      </td>
-                    </tr>
+              {/* Charts row */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
+                {/* Cluster distribution */}
+                <div style={{ background: "#fff", borderRadius: 16, padding: "1.5rem", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+                  <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>Empresas por clúster (SII)</h3>
+                  {clusterList.map(c => {
+                    const pct = Math.round((c.total / 245) * 100);
+                    return (
+                      <div key={c.id} style={{ marginBottom: 10 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div style={{ width: 8, height: 8, borderRadius: "50%", background: c.color }} />
+                            <span style={{ fontSize: 13 }}>{c.titulo}</span>
+                          </div>
+                          <span style={{ fontSize: 12, color: "#888", fontWeight: 600 }}>{c.total}</span>
+                        </div>
+                        <div style={{ height: 6, background: "#F0F0F0", borderRadius: 4 }}>
+                          <div style={{ height: "100%", width: `${Math.min(pct,100)}%`, background: c.color, borderRadius: 4 }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Municipality distribution */}
+                <div style={{ background: "#fff", borderRadius: 16, padding: "1.5rem", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+                  <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>Top municipios</h3>
+                  {muniData.map(([muni, count]) => (
+                    <div key={muni} style={{ marginBottom: 8 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                        <span style={{ fontSize: 13 }}>{muni.charAt(0) + muni.slice(1).toLowerCase()}</span>
+                        <span style={{ fontSize: 12, color: "#888", fontWeight: 600 }}>{count.toLocaleString()}</span>
+                      </div>
+                      <div style={{ height: 5, background: "#F0F0F0", borderRadius: 4 }}>
+                        <div style={{ height: "100%", width: `${Math.round((count/maxMuni)*100)}%`, background: "#0F9B8E", borderRadius: 4 }} />
+                      </div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-
-        {/* ===== EMPRESAS ===== */}
-        {page === "Empresas" && (
-          <>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-              <div>
-                <h1 style={{ fontSize: 24, margin: "0 0 4px" }}>Empresas registradas</h1>
-                <p style={{ color: "#666", fontSize: 14, margin: 0 }}>Mostrando {filtered.length} de {totalEmpresas.toLocaleString()} empresas totales</p>
+                </div>
               </div>
-            </div>
 
-            <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-              <div style={{ position: "relative", flex: 1, minWidth: 260 }}>
-                <svg style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input value={search} onChange={e => setSearch(e.target.value)}
-                  placeholder="Buscar por razón social, NIT o matrícula..."
-                  style={{ ...base.input, paddingLeft: 36, fontSize: 14 }} />
+              {/* Ruta C users stats + recent */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 20 }}>
+                <div style={{ background: "#fff", borderRadius: 16, padding: "1.5rem", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+                  <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>Emprendedores por etapa</h3>
+                  {ETAPAS.map(e => {
+                    const count = etapaCountReal[e] || 0;
+                    return (
+                      <div key={e} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #F5F5F5" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: "50%", background: etapaColors[e] || "#888" }} />
+                          <span style={{ fontSize: 13 }}>{e}</span>
+                        </div>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: etapaColors[e] || "#888" }}>{count}</span>
+                      </div>
+                    );
+                  })}
+                  <div style={{ marginTop: 14, padding: "10px 14px", background: "#F0FBF9", borderRadius: 10 }}>
+                    <p style={{ margin: 0, fontSize: 12, color: "#0F9B8E", fontWeight: 600 }}>Total en Ruta C: {realUserCount} emprendedores</p>
+                  </div>
+                </div>
+
+                <div style={{ background: "#fff", borderRadius: 16, padding: "1.5rem", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+                  <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>Últimos registros en Ruta C</h3>
+                  {loadingUsers ? (
+                    <p style={{ color: "#888", fontSize: 13 }}>Cargando...</p>
+                  ) : supaUsers.filter(u => u.role !== "admin").slice(0, 6).map((u, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: "1px solid #F5F5F5" }}>
+                      <div style={{ width: 34, height: 34, borderRadius: "50%", background: clusterColor(u.cluster) + "18", border: `2px solid ${clusterColor(u.cluster)}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: clusterColor(u.cluster), flexShrink: 0 }}>
+                        {getInitials(u.razon_social)}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: "0 0 1px", fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.razon_social || "Sin nombre"}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: "#888" }}>{u.municipio} · {u.cluster || "Sin clúster"}</p>
+                      </div>
+                      <span style={{ fontSize: 11, background: (etapaColors[u.etapa] || "#888") + "18", color: etapaColors[u.etapa] || "#888", borderRadius: 20, padding: "2px 8px", fontWeight: 600, whiteSpace: "nowrap" }}>{u.etapa || "Inicio"}</span>
+                    </div>
+                  ))}
+                  {supaUsers.filter(u => u.role !== "admin").length === 0 && !loadingUsers && (
+                    <p style={{ color: "#888", fontSize: 13 }}>Aún no hay emprendedores registrados.</p>
+                  )}
+                </div>
               </div>
-              <select value={clusterFilter} onChange={e => setClusterFilter(e.target.value)}
-                style={{ ...base.input, width: 200 }}>
-                <option value="">Todos los clústeres</option>
-                {clusterList.map(c => <option key={c.id} value={c.titulo}>{c.titulo}</option>)}
-              </select>
-            </div>
+            </>
+          )}
 
-            <div style={{ ...base.card, padding: 0, overflow: "hidden" }}>
-              <div style={{ overflowX: "auto" }}>
+          {/* ===== EMPRENDEDORES (usuarios reales de Supabase) ===== */}
+          {page === "Emprendedores" && (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+                <div>
+                  <h1 style={{ fontSize: 24, margin: "0 0 4px" }}>Emprendedores registrados</h1>
+                  <p style={{ color: "#666", fontSize: 14, margin: 0 }}>{realUserCount} usuarios activos en Ruta C Conecta</p>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+                <div style={{ position: "relative", flex: 1, minWidth: 260 }}>
+                  <svg style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar emprendedor..." style={{ ...base.input, paddingLeft: 36, fontSize: 14 }} />
+                </div>
+                <select value={clusterFilter} onChange={e => setClusterFilter(e.target.value)} style={{ ...base.input, width: 200 }}>
+                  <option value="">Todos los clústeres</option>
+                  {clusterList.map(c => <option key={c.id} value={c.titulo}>{c.titulo}</option>)}
+                </select>
+              </div>
+
+              <div style={{ background: "#fff", borderRadius: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", overflow: "hidden" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: "#F8F9FA" }}>
-                      {["Razón Social", "Municipio", "NIT", "Matrícula", "Tipo org.", "Teléfono", "Estado"].map(h => (
-                        <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontWeight: 600, color: "#555", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{h}</th>
+                      {["Emprendedor", "Email", "Municipio", "Clúster", "Etapa", "WhatsApp", "Registrado"].map(h => (
+                        <th key={h} style={{ padding: "11px 14px", textAlign: "left", fontWeight: 600, color: "#555", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.slice(0, 100).map((u, i) => (
+                    {loadingUsers && <tr><td colSpan={7} style={{ padding: "2rem", textAlign: "center", color: "#888" }}>Cargando...</td></tr>}
+                    {!loadingUsers && supaUsers.filter(u => u.role !== "admin").filter(u => {
+                      const q = search.toLowerCase();
+                      return (!q || (u.razon_social || "").toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q))
+                        && (!clusterFilter || u.cluster === clusterFilter);
+                    }).map((u, i) => (
                       <tr key={i} style={{ borderTop: "1px solid #F0F0F0" }}>
-                        <td style={{ padding: "9px 14px", fontWeight: 500, maxWidth: 240 }}>{u.razonSocial || u.s}</td>
-                        <td style={{ padding: "9px 14px", color: "#555", whiteSpace: "nowrap" }}>{u.municipio || u.mu || "—"}</td>
-                        <td style={{ padding: "9px 14px", color: "#666", fontSize: 12 }}>{u.nit || u.ni || "—"}</td>
-                        <td style={{ padding: "9px 14px", color: "#666", fontSize: 12 }}>{u.matricula || u.ma || "—"}</td>
-                        <td style={{ padding: "9px 14px", color: "#555", fontSize: 12 }}>{u.tipoOrg || u.to || u.role === "user" ? "Emprendedor" : "—"}</td>
-                        <td style={{ padding: "9px 14px", color: "#555", fontSize: 12 }}>{u.telefono || u.te || u.whatsapp ? `+57 ${u.whatsapp}` : "—"}</td>
-                        <td style={{ padding: "9px 14px" }}>
-                          <span style={{ background: "#E8F5E9", color: "#4CAF50", borderRadius: 12, padding: "2px 8px", fontSize: 11, fontWeight: 600 }}>{u.estado || u.es || "Activa"}</span>
+                        <td style={{ padding: "10px 14px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ width: 30, height: 30, borderRadius: "50%", background: clusterColor(u.cluster) + "18", border: `1.5px solid ${clusterColor(u.cluster)}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: clusterColor(u.cluster), flexShrink: 0 }}>
+                              {getInitials(u.razon_social)}
+                            </div>
+                            <span style={{ fontWeight: 500 }}>{u.razon_social || "Sin nombre"}</span>
+                          </div>
                         </td>
+                        <td style={{ padding: "10px 14px", color: "#555", fontSize: 12 }}>{u.email || "—"}</td>
+                        <td style={{ padding: "10px 14px", color: "#555" }}>{u.municipio || "—"}</td>
+                        <td style={{ padding: "10px 14px" }}>
+                          {u.cluster && <span style={{ background: clusterColor(u.cluster) + "18", color: clusterColor(u.cluster), borderRadius: 20, padding: "2px 8px", fontSize: 11, fontWeight: 600 }}>{u.cluster}</span>}
+                        </td>
+                        <td style={{ padding: "10px 14px" }}>
+                          {u.etapa && <span style={{ background: (etapaColors[u.etapa] || "#888") + "18", color: etapaColors[u.etapa] || "#888", borderRadius: 20, padding: "2px 8px", fontSize: 11, fontWeight: 600 }}>{u.etapa}</span>}
+                        </td>
+                        <td style={{ padding: "10px 14px", color: "#555", fontSize: 12 }}>{u.whatsapp ? `+57 ${u.whatsapp}` : "—"}</td>
+                        <td style={{ padding: "10px 14px", color: "#888", fontSize: 11 }}>{u.created_at ? new Date(u.created_at).toLocaleDateString("es-CO") : "—"}</td>
                       </tr>
                     ))}
+                    {!loadingUsers && supaUsers.filter(u => u.role !== "admin").length === 0 && (
+                      <tr><td colSpan={7} style={{ padding: "2rem", textAlign: "center", color: "#888" }}>Aún no hay emprendedores registrados en la plataforma.</td></tr>
+                    )}
                   </tbody>
                 </table>
               </div>
-              {filtered.length > 100 && (
-                <div style={{ padding: "12px 20px", textAlign: "center", fontSize: 13, color: "#888", borderTop: "1px solid #F0F0F0" }}>
-                  Mostrando 100 de {filtered.length} resultados. Usa el buscador para filtrar.
-                </div>
-              )}
-            </div>
-          </>
-        )}
+            </>
+          )}
 
-        {/* ===== CLUSTERS ===== */}
-        {page === "Clusters" && (
-          <>
-            <h1 style={{ fontSize: 24, margin: "0 0 4px" }}>Clústeres del Magdalena</h1>
-            <p style={{ color: "#666", fontSize: 14, marginBottom: 24 }}>Sectores productivos estratégicos de la región</p>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 20 }}>
-              {clusterList.map(c => {
-                const miembros = CLUSTER_MIEMBROS_REALES[c.id] || [];
-                return (
-                  <div key={c.id} style={{ ...base.card }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-                      <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-                          <div style={{ width: 12, height: 12, borderRadius: "50%", background: c.color }} />
-                          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{c.titulo}</h3>
-                        </div>
-                        <p style={{ margin: 0, fontSize: 13, color: "#666" }}>{c.total} empresas en el clúster</p>
-                      </div>
-                      <span style={{ background: c.bgLight, color: c.color, border: `1px solid ${c.color}30`, borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 600 }}>ACTIVO</span>
-                    </div>
-
-                    <div style={{ height: 6, background: "#F0F0F0", borderRadius: 4, marginBottom: 14 }}>
-                      <div style={{ height: "100%", width: `${Math.min(Math.round((c.total / 245) * 100), 100)}%`, background: c.color, borderRadius: 4 }} />
-                    </div>
-
-                    {miembros.length > 0 && (
-                      <div>
-                        <p style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: 0.5, margin: "0 0 8px" }}>Muestra de empresas</p>
-                        {miembros.slice(0, 4).map((m, i) => (
-                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: i < 3 ? "1px solid #F5F5F5" : "none" }}>
-                            <div style={{ width: 28, height: 28, borderRadius: "50%", background: c.color + "18", border: `1.5px solid ${c.color}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: c.color, flexShrink: 0 }}>
-                              {m.s.split(" ").slice(0,2).map(w=>w[0]).join("").toUpperCase()}
-                            </div>
-                            <span style={{ fontSize: 12, color: "#333", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.s}</span>
-                          </div>
+          {/* ===== EMPRESAS SII ===== */}
+          {page === "Empresas SII" && (
+            <>
+              <div style={{ marginBottom: 20 }}>
+                <h1 style={{ fontSize: 24, margin: "0 0 4px" }}>Empresas registradas en SII</h1>
+                <p style={{ color: "#666", fontSize: 14, margin: 0 }}>Muestra de {REGISTRADOS_MUESTRA.length} de {totalRegistrados.toLocaleString()} empresas totales</p>
+              </div>
+              <div style={{ position: "relative", marginBottom: 16 }}>
+                <svg style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por razón social, NIT o municipio..." style={{ ...base.input, paddingLeft: 36, fontSize: 14 }} />
+              </div>
+              <div style={{ background: "#fff", borderRadius: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", overflow: "hidden" }}>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: "#F8F9FA" }}>
+                        {["Razón Social", "Municipio", "NIT", "Matrícula", "Tipo", "Teléfono", "Estado"].map(h => (
+                          <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontWeight: 600, color: "#555", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{h}</th>
                         ))}
-                        {miembros.length > 4 && <p style={{ fontSize: 11, color: "#888", margin: "8px 0 0" }}>+{miembros.length - 4} más en este clúster</p>}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        )}
-
-        {/* ===== REPORTES ===== */}
-        {page === "Reportes" && (
-          <>
-            <h1 style={{ fontSize: 24, margin: "0 0 4px" }}>Reportes y estadísticas</h1>
-            <p style={{ color: "#666", fontSize: 14, marginBottom: 24 }}>Indicadores del ecosistema empresarial del Magdalena</p>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 24 }}>
-              {[
-                { label: "Total registros SII", val: totalEmpresas.toLocaleString(), sub: "Empresas activas en sistema", color: "#0F9B8E" },
-                { label: "Santa Marta", val: "7.800", sub: "78% del total departamental", color: "#185FA5" },
-                { label: "Clústeres activos", val: clusterList.length, sub: "Sectores estratégicos", color: "#9C27B0" },
-              ].map(k => (
-                <div key={k.label} style={{ ...base.card }}>
-                  <p style={{ margin: "0 0 4px", fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600 }}>{k.label}</p>
-                  <h3 style={{ margin: "0 0 2px", fontSize: 32, fontWeight: 800, color: k.color }}>{k.val}</h3>
-                  <p style={{ margin: 0, fontSize: 12, color: "#888" }}>{k.sub}</p>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {REGISTRADOS_MUESTRA.filter(u => {
+                        const q = search.toLowerCase();
+                        return !q || u.s.toLowerCase().includes(q) || u.mu.toLowerCase().includes(q) || u.ni.includes(q);
+                      }).slice(0, 80).map((u, i) => (
+                        <tr key={i} style={{ borderTop: "1px solid #F0F0F0" }}>
+                          <td style={{ padding: "9px 14px", fontWeight: 500, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.s}</td>
+                          <td style={{ padding: "9px 14px", color: "#555", whiteSpace: "nowrap" }}>{u.mu}</td>
+                          <td style={{ padding: "9px 14px", color: "#666", fontSize: 12 }}>{u.ni}</td>
+                          <td style={{ padding: "9px 14px", color: "#666", fontSize: 12 }}>{u.ma}</td>
+                          <td style={{ padding: "9px 14px", color: "#555", fontSize: 12, whiteSpace: "nowrap" }}>{u.to}</td>
+                          <td style={{ padding: "9px 14px", color: "#555", fontSize: 12 }}>{u.te}</td>
+                          <td style={{ padding: "9px 14px" }}>
+                            <span style={{ background: "#E8F5E9", color: "#4CAF50", borderRadius: 12, padding: "2px 8px", fontSize: 11, fontWeight: 600 }}>{u.es}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
-            </div>
+              </div>
+            </>
+          )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
-              <div style={{ ...base.card }}>
-                <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>Distribución por municipio</h3>
-                {Object.entries(MUNICIPIO_CONTEO).map(([muni, count]) => (
-                  <div key={muni} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #F5F5F5" }}>
-                    <span style={{ fontSize: 13 }}>{muni.charAt(0) + muni.slice(1).toLowerCase()}</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ width: 80, height: 5, background: "#F0F0F0", borderRadius: 3 }}>
-                        <div style={{ height: "100%", width: `${Math.round((count/7800)*100)}%`, background: "#0F9B8E", borderRadius: 3 }} />
+          {/* ===== CLUSTERS ===== */}
+          {page === "Clusters" && (
+            <>
+              <h1 style={{ fontSize: 24, margin: "0 0 4px" }}>Clústeres del Magdalena</h1>
+              <p style={{ color: "#666", fontSize: 14, marginBottom: 24 }}>Sectores productivos estratégicos monitoreados</p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 20 }}>
+                {clusterList.map(c => {
+                  const miembros = CLUSTER_MIEMBROS_REALES[c.id] || [];
+                  const rutaCCount = clusterCountReal[c.titulo] || 0;
+                  return (
+                    <div key={c.id} style={{ background: "#fff", borderRadius: 16, padding: "1.5rem", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", borderTop: `3px solid ${c.color}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ width: 14, height: 14, borderRadius: "50%", background: c.color }} />
+                          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{c.titulo}</h3>
+                        </div>
+                        <span style={{ background: "#E8F5E9", color: "#4CAF50", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600 }}>ACTIVO</span>
                       </div>
-                      <span style={{ fontSize: 12, fontWeight: 600, minWidth: 40, textAlign: "right" }}>{count.toLocaleString()}</span>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+                        <div style={{ background: c.bgLight, borderRadius: 10, padding: "10px 14px" }}>
+                          <p style={{ margin: "0 0 2px", fontSize: 11, color: c.color, fontWeight: 600 }}>EN SII</p>
+                          <p style={{ margin: 0, fontSize: 22, fontWeight: 800, color: c.color }}>{c.total}</p>
+                        </div>
+                        <div style={{ background: "#F0FBF9", borderRadius: 10, padding: "10px 14px" }}>
+                          <p style={{ margin: "0 0 2px", fontSize: 11, color: "#0F9B8E", fontWeight: 600 }}>EN RUTA C</p>
+                          <p style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "#0F9B8E" }}>{rutaCCount}</p>
+                        </div>
+                      </div>
+                      <div style={{ height: 5, background: "#F0F0F0", borderRadius: 4, marginBottom: 12 }}>
+                        <div style={{ height: "100%", width: `${Math.min(Math.round((c.total/245)*100),100)}%`, background: c.color, borderRadius: 4 }} />
+                      </div>
+                      {miembros.length > 0 && (
+                        <div>
+                          <p style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: 0.5, margin: "0 0 8px" }}>Muestra de empresas SII</p>
+                          {miembros.slice(0, 3).map((m, i) => (
+                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", borderBottom: i < 2 ? "1px solid #F5F5F5" : "none" }}>
+                              <div style={{ width: 24, height: 24, borderRadius: "50%", background: c.color + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, color: c.color, flexShrink: 0 }}>
+                                {m.s.split(" ").slice(0,2).map(w=>w[0]).join("")}
+                              </div>
+                              <span style={{ fontSize: 12, color: "#333", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.s}</span>
+                            </div>
+                          ))}
+                          {miembros.length > 3 && <p style={{ fontSize: 11, color: "#888", margin: "6px 0 0" }}>+{miembros.length - 3} más</p>}
+                        </div>
+                      )}
                     </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {/* ===== REPORTES ===== */}
+          {page === "Reportes" && (
+            <>
+              <h1 style={{ fontSize: 24, margin: "0 0 4px" }}>Reportes y proyecciones</h1>
+              <p style={{ color: "#666", fontSize: 14, marginBottom: 24 }}>Análisis del ecosistema empresarial del Magdalena</p>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 24 }}>
+                {[
+                  { label: "Total SII", val: totalRegistrados.toLocaleString(), sub: "Empresas con matrícula activa", color: "#0F9B8E" },
+                  { label: "Santa Marta", val: "7.800", sub: "78% del total departamental", color: "#185FA5" },
+                  { label: "Emprendedores digitales", val: realUserCount, sub: "En Ruta C Conecta", color: "#9C27B0" },
+                ].map(k => (
+                  <div key={k.label} style={{ background: "#fff", borderRadius: 16, padding: "1.5rem", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+                    <p style={{ margin: "0 0 4px", fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600 }}>{k.label}</p>
+                    <h3 style={{ margin: "0 0 2px", fontSize: 32, fontWeight: 800, color: k.color }}>{k.val}</h3>
+                    <p style={{ margin: 0, fontSize: 12, color: "#888" }}>{k.sub}</p>
                   </div>
                 ))}
               </div>
 
-              <div style={{ ...base.card }}>
-                <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>Empresas por clúster</h3>
-                {clusterList.map(c => (
-                  <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid #F5F5F5" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ width: 10, height: 10, borderRadius: "50%", background: c.color }} />
-                      <span style={{ fontSize: 13 }}>{c.titulo}</span>
-                    </div>
-                    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                      <div style={{ width: 60, height: 5, background: "#F0F0F0", borderRadius: 3 }}>
-                        <div style={{ height: "100%", width: `${Math.round((c.total/245)*100)}%`, background: c.color, borderRadius: 3 }} />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
+                <div style={{ background: "#fff", borderRadius: 16, padding: "1.5rem", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+                  <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>Distribución por municipio</h3>
+                  {Object.entries(MUNICIPIO_CONTEO).map(([muni, count]) => (
+                    <div key={muni} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #F5F5F5" }}>
+                      <span style={{ fontSize: 13 }}>{muni.charAt(0) + muni.slice(1).toLowerCase()}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ width: 70, height: 4, background: "#F0F0F0", borderRadius: 3 }}>
+                          <div style={{ height: "100%", width: `${Math.round((count/7800)*100)}%`, background: "#0F9B8E", borderRadius: 3 }} />
+                        </div>
+                        <span style={{ fontSize: 12, fontWeight: 600, minWidth: 44, textAlign: "right" }}>{count.toLocaleString()}</span>
                       </div>
-                      <span style={{ fontSize: 12, fontWeight: 600, minWidth: 32, textAlign: "right" }}>{c.total}</span>
                     </div>
+                  ))}
+                </div>
+                <div style={{ background: "#fff", borderRadius: 16, padding: "1.5rem", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+                  <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>Resumen ejecutivo</h3>
+                  <p style={{ color: "#555", fontSize: 14, lineHeight: 1.8 }}>
+                    El Magdalena cuenta con <strong>{totalRegistrados.toLocaleString()} empresas</strong> en el SII. Santa Marta concentra el <strong>78%</strong> ({MUNICIPIO_CONTEO["SANTA MARTA"]?.toLocaleString()}) del tejido empresarial departamental.
+                  </p>
+                  <p style={{ color: "#555", fontSize: 14, lineHeight: 1.8, marginTop: 12 }}>
+                    Los clústeres de <strong>Turismo, Logística y Banano</strong> lideran con 245 empresas cada uno. Ruta C ha incorporado digitalmente a <strong>{realUserCount} emprendedores</strong>, con potencial de escalar a los {totalRegistrados.toLocaleString()} registros del SII.
+                  </p>
+                  <div style={{ marginTop: 16, padding: "12px 16px", background: "#F0FBF9", borderRadius: 10 }}>
+                    <p style={{ margin: 0, fontSize: 13, color: "#0F9B8E", fontWeight: 600 }}>Tasa de adopción digital: {totalRegistrados > 0 ? ((realUserCount / totalRegistrados) * 100).toFixed(2) : 0}%</p>
                   </div>
-                ))}
+                </div>
               </div>
-            </div>
+            </>
+          )}
 
-            <div style={{ ...base.card }}>
-              <h3 style={{ margin: "0 0 6px", fontSize: 16 }}>Resumen ejecutivo</h3>
-              <p style={{ color: "#666", fontSize: 14, lineHeight: 1.7, margin: 0 }}>
-                El ecosistema empresarial del Magdalena cuenta con <strong>{totalEmpresas.toLocaleString()} empresas registradas</strong> en el SII de la Cámara de Comercio de Santa Marta.
-                La ciudad de Santa Marta concentra el <strong>78% de las empresas</strong> ({MUNICIPIO_CONTEO["SANTA MARTA"]?.toLocaleString()}),
-                seguida de Ciénaga ({MUNICIPIO_CONTEO["CIÉNAGA"]?.toLocaleString()}) y Fundación ({MUNICIPIO_CONTEO["FUNDACION"]?.toLocaleString()}).
-                Los clústeres de mayor participación son <strong>Turismo, Logística y Banano</strong> con 245 empresas cada uno.
-                La plataforma Ruta C actualmente conecta a <strong>{Object.values(loadUsers()).length} emprendedores registrados</strong> digitalmente en la red.
-              </p>
-            </div>
-          </>
-        )}
-
+        </main>
       </div>
     </div>
   );
@@ -1978,7 +2155,7 @@ export default function App() {
           .select("*")
           .eq("id", session.user.id)
           .single();
-        const u = { ...perfil, email: session.user.email, razonSocial: perfil?.razon_social };
+        const u = { ...perfil, email: session.user.email, razonSocial: perfil?.razon_social || session.user.user_metadata?.razon_social || "Usuario", role: perfil?.role || session.user.user_metadata?.role || "user" };
         setUser(u);
         saveCurrent(u);
         setScreen("app");
@@ -2023,7 +2200,8 @@ export default function App() {
   if (screen === "login") return <LoginPage onLogin={login} onRegister={() => setScreen("register")} darkMode={darkMode} onToggleDark={toggleDark} />;
   if (screen === "register") return <RegisterPage onDone={login} onLogin={() => setScreen("login")} />;
 
-  if (user?.role === "admin") return <AdminDashboard onLogout={logout} />;
+  const isAdmin = user?.role === "admin" || user?.email === "camara@rutac.gov.co";
+  if (isAdmin) return <AdminDashboard onLogout={logout} user={user} />;
 
   const pages = {
     "Inicio": <InicioPage user={user} />,
