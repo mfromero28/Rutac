@@ -152,7 +152,7 @@ function Field({ label, error, children }) {
 }
 
 // ==================== LOGIN ====================
-function LoginPage({ onLogin, onRegister }) {
+function LoginPage({ onLogin, onRegister, darkMode, onToggleDark }) {
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
@@ -188,7 +188,7 @@ function LoginPage({ onLogin, onRegister }) {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#EEF3F8", fontFamily: base.fontFamily, display: "flex", flexDirection: "column" }}>
+    <div style={{ minHeight: "100vh", background: darkMode ? "#0F1117" : "#EEF3F8", fontFamily: base.fontFamily, display: "flex", flexDirection: "column" }}>
       <nav style={{ background: "#fff", borderBottom: "1px solid #EAEAEA", padding: "0 2rem", display: "flex", alignItems: "center", height: 56 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ width: 34, height: 34, borderRadius: 8, background: "#0F9B8E", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 18 }}>C</div>
@@ -196,8 +196,11 @@ function LoginPage({ onLogin, onRegister }) {
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
           <span style={{ fontSize: 14, color: "#333", fontWeight: 500 }}>Iniciar sesión</span>
-          <div style={{ width: 34, height: 34, borderRadius: 8, border: "1.5px solid #D8DDE5", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+          <div onClick={onToggleDark} style={{ width: 34, height: 34, borderRadius: 8, border: "1.5px solid #D8DDE5", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: darkMode ? "#1A1A2E" : "#fff" }}>
+            {darkMode
+              ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+              : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            }
           </div>
         </div>
       </nav>
@@ -298,20 +301,27 @@ function RegisterPage({ onDone, onLogin }) {
       });
 
       if (authError) {
-        if (authError.message.includes("already registered")) {
+        if (authError.message.includes("already registered") || authError.message.includes("User already registered")) {
           setErrors({ email: "Ya existe una cuenta con este correo" });
         } else {
-          setErrors({ email: authError.message });
+          setErrors({ email: "Error: " + authError.message });
         }
         setLoading(false);
         return;
       }
+      // Handle email confirmation requirement
+      if (!authData?.user) {
+        setErrors({ email: "Revisa tu correo para confirmar la cuenta" });
+        setLoading(false);
+        return;
+      }
 
-      // 2. Actualizar el perfil con todos los datos del formulario
+      // 2. Upsert perfil con todos los datos del formulario
       const matricula = "R" + Date.now().toString().slice(-6);
       const { error: profileError } = await supabase
         .from("perfiles")
-        .update({
+        .upsert({
+          id: authData.user.id,
           razon_social: form.razonSocial,
           nit: form.nit || null,
           cluster: form.sector,
@@ -325,11 +335,10 @@ function RegisterPage({ onDone, onLogin }) {
           completitud: 70,
           matricula: matricula,
           role: "user",
-        })
-        .eq("id", authData.user.id);
+        }, { onConflict: "id" });
 
       if (profileError) {
-        console.error("Error perfil:", profileError);
+        console.error("Error perfil:", profileError.message);
       }
 
       const newUser = {
@@ -613,6 +622,76 @@ function ReviewSection({ title, onEdit, rows }) {
   );
 }
 
+// ==================== USER MENU DROPDOWN ====================
+function UserMenu({ user, onLogout, onNavigate }) {
+  const [open, setOpen] = useState(false);
+  const displayName = user?.razonSocial || user?.razon_social || "Usuario";
+  const color = clusterColor(user?.cluster);
+
+  return (
+    <div style={{ position: "relative" }}>
+      <div onClick={() => setOpen(o => !o)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "4px 8px", borderRadius: 8, background: open ? "#F0F0F0" : "transparent" }}>
+        <div style={{ width: 32, height: 32, borderRadius: "50%", background: color + "20", border: `2px solid ${color}`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12, color }}>
+          {getInitials(displayName)}
+        </div>
+        <span style={{ fontSize: 13, fontWeight: 500, color: "#333", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayName.split(" ")[0]}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2" style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .2s" }}><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 99 }} />
+          <div style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", background: "#fff", borderRadius: 12, boxShadow: "0 8px 24px rgba(0,0,0,0.12)", border: "1px solid #EAEAEA", minWidth: 220, zIndex: 200, overflow: "hidden" }}>
+            {/* Profile header */}
+            <div style={{ padding: "16px", borderBottom: "1px solid #F0F0F0", background: "#F8F9FA" }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <div style={{ width: 40, height: 40, borderRadius: "50%", background: color + "20", border: `2px solid ${color}`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14, color }}>
+                  {getInitials(displayName)}
+                </div>
+                <div>
+                  <p style={{ margin: 0, fontWeight: 600, fontSize: 14, color: "#1A1A2E" }}>{displayName}</p>
+                  <p style={{ margin: 0, fontSize: 12, color: "#888" }}>{user?.email}</p>
+                  {user?.cluster && <p style={{ margin: "2px 0 0", fontSize: 11, color, fontWeight: 600 }}>{user.cluster}</p>}
+                </div>
+              </div>
+            </div>
+
+            {/* Menu items */}
+            {[
+              { label: "Mi perfil", icon: "👤", page: "Mi negocio" },
+              { label: "Mis conexiones", icon: "🔗", page: "Conexiones" },
+              { label: "Recomendaciones", icon: "⭐", page: "Recomendaciones" },
+            ].map(item => (
+              <button key={item.label} onClick={() => { onNavigate(item.page); setOpen(false); }} style={{
+                width: "100%", padding: "11px 16px", background: "none", border: "none",
+                textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: 10,
+                fontSize: 14, color: "#333", fontFamily: base.fontFamily
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = "#F5F5F5"}
+              onMouseLeave={e => e.currentTarget.style.background = "none"}
+              >
+                <span>{item.icon}</span>{item.label}
+              </button>
+            ))}
+
+            <div style={{ borderTop: "1px solid #F0F0F0", margin: "4px 0" }} />
+            <button onClick={onLogout} style={{
+              width: "100%", padding: "11px 16px", background: "none", border: "none",
+              textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: 10,
+              fontSize: 14, color: "#D85A30", fontFamily: base.fontFamily
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = "#FFF5F2"}
+            onMouseLeave={e => e.currentTarget.style.background = "none"}
+            >
+              <span>🚪</span>Cerrar sesión
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ==================== NAVBAR ====================
 function Navbar({ user, page, setPage, onLogout }) {
   const navItems = user?.role === "admin"
@@ -648,20 +727,7 @@ function Navbar({ user, page, setPage, onLogout }) {
         <button style={{ background: "none", border: "none", cursor: "pointer", padding: 6 }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"/></svg>
         </button>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-          <div style={{
-            width: 32, height: 32, borderRadius: "50%",
-            background: clusterColor(user?.cluster) + "20",
-            border: `2px solid ${clusterColor(user?.cluster)}`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontWeight: 700, fontSize: 12, color: clusterColor(user?.cluster)
-          }}>
-            {getInitials(user?.razonSocial)}
-          </div>
-          <span style={{ fontSize: 13, fontWeight: 500, color: "#333" }}>{user?.razonSocial?.split(" ")[0]}</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
-        <button onClick={onLogout} style={{ background: "none", border: "none", cursor: "pointer", padding: "4px 8px", color: "#888", fontSize: 13, fontFamily: base.fontFamily }}>Salir</button>
+        <UserMenu user={user} onLogout={onLogout} onNavigate={setPage} />
       </div>
     </nav>
   );
@@ -749,12 +815,12 @@ function InicioPage({ user }) {
 // ==================== RECOMENDACIONES ====================
 function RecomendacionesPage({ user }) {
   const actors = [
-    { id: 1, initials: "CD", name: "CASTILLO DE HORTA KESSIA ORNELLA", desc: "Comercio al por menor en establecimientos no especializados, con surtido compuesto principalmente por productos diferentes de alimentos (víveres en general), bebidas (alcohólicas y no alcohólicas) y tab", city: "SANTA MARTA", ciiu: "G4719", match: 89, tipo: "Cliente potencial", nueva: true },
-    { id: 2, initials: "ZB", name: "ZUÑIGA BELTRAN TOMAS ALFONSO", desc: "Comercio al por menor en establecimientos no especializados, con surtido compuesto principalmente por productos diferentes de alimentos (víveres en general), bebidas (alcohólicas y no alcohólicas) y tab", city: "SANTA MARTA", ciiu: "G4719", match: 85, tipo: "Cliente potencial", nueva: false },
-    { id: 3, initials: "DD", name: "DIANA DEL CARMEN RUDAS URIELES", desc: "Comercio al por menor de productos agrícolas para el consumo en establecimientos especializados (CIIU G4721) · SANTA MARTA.", city: "SANTA MARTA", ciiu: "G4721", match: 82, tipo: "Aliado", nueva: false },
-    { id: 4, initials: "LY", name: "LORENA YOLIMA AVENDAÑO MIRANDA", desc: "Comercio al por menor de productos agrícolas para el consumo en establecimientos especializados (CIIU G4721) · SANTA MARTA.", city: "SANTA MARTA", ciiu: "G4721", match: 79, tipo: "Aliado", nueva: false },
-    { id: 5, initials: "AB", name: "AVENDAÑO BELLO EDWIN ANDRES", desc: "Comercio al por menor de carnes (incluye aves de corral), productos cárnicos, pescados y productos de mar, en establecimientos especializados (CIIU G4723) · SANTA MARTA", city: "SANTA MARTA", ciiu: "G4723", match: 76, tipo: "Proveedor", nueva: false },
-    { id: 6, initials: "PT", name: "PEREZ TORRES JULIA HORTENCIA", desc: "Comercio al por menor de carnes (incluye aves de corral), productos cárnicos, pescados y productos de mar, en establecimientos especializados (CIIU G4723) · SANTA MARTA", city: "SANTA MARTA", ciiu: "G4723", match: 71, tipo: "Referente", nueva: false },
+    { id: 1, initials: "CD", name: "CASTILLO DE HORTA KESSIA ORNELLA", desc: "Tienda de abarrotes y productos de consumo masivo en el centro de Santa Marta. Atiende a más de 80 familias diariamente con productos frescos y empacados.", city: "SANTA MARTA", ciiu: "G4719", match: 89, tipo: "Cliente potencial", nueva: true, sector: "Comercio al por menor", imgs: ["https://images.unsplash.com/photo-1542838132-92c53300491e?w=300&h=200&fit=crop", "https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=300&h=200&fit=crop"] },
+    { id: 2, initials: "ZB", name: "ZUÑIGA BELTRAN TOMAS ALFONSO", desc: "Distribuidora de bebidas y snacks para el canal tradicional. Cubre los barrios Pescaíto, Mamatoco y Bastidas con entregas diarias.", city: "SANTA MARTA", ciiu: "G4719", match: 85, tipo: "Cliente potencial", nueva: false, sector: "Distribución", imgs: ["https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=300&h=200&fit=crop"] },
+    { id: 3, initials: "DD", name: "DIANA DEL CARMEN RUDAS URIELES", desc: "Comercializadora de frutas y verduras frescas de la Sierra Nevada. Proveedora de restaurantes, hoteles y supermercados de la ciudad.", city: "SANTA MARTA", ciiu: "G4721", match: 82, tipo: "Aliado", nueva: false, sector: "Productos agrícolas", imgs: ["https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=300&h=200&fit=crop", "https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=300&h=200&fit=crop"] },
+    { id: 4, initials: "LY", name: "LORENA YOLIMA AVENDAÑO MIRANDA", desc: "Punto de venta especializado en productos orgánicos y de la canasta familiar. Ubicada en El Rodadero, sirve a turistas y residentes.", city: "SANTA MARTA", ciiu: "G4721", match: 79, tipo: "Aliado", nueva: false, sector: "Tienda especializada", imgs: ["https://images.unsplash.com/photo-1533900298318-6b8da08a523e?w=300&h=200&fit=crop"] },
+    { id: 5, initials: "AB", name: "AVENDAÑO BELLO EDWIN ANDRES", desc: "Carnicería y pescadería con más de 15 años en el mercado samario. Proveedor certificado de proteínas para cadenas hoteleras y restaurantes.", city: "SANTA MARTA", ciiu: "G4723", match: 76, tipo: "Proveedor", nueva: false, sector: "Carnes y mariscos", imgs: ["https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=300&h=200&fit=crop"] },
+    { id: 6, initials: "PT", name: "PEREZ TORRES JULIA HORTENCIA", desc: "Distribuidora de productos del mar y mariscos frescos del Pacífico. Logística de frío propia para garantizar calidad en toda la cadena.", city: "SANTA MARTA", ciiu: "G4723", match: 71, tipo: "Referente", nueva: false, sector: "Productos del mar", imgs: ["https://images.unsplash.com/photo-1510130387422-82bed34b37e9?w=300&h=200&fit=crop"] },
   ];
 
   const [selected, setSelected] = useState(null);
@@ -821,12 +887,20 @@ function RecomendacionesPage({ user }) {
               <Avatar name={selected.initials} size={48} color={tipoColor[selected.tipo]} />
               <div>
                 <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>{selected.name}</h3>
-                <p style={{ margin: 0, fontSize: 12, color: "#666" }}>{selected.desc.slice(0, 80)}...</p>
-                <div style={{ marginTop: 6, display: "flex", gap: 6 }}>
+                <p style={{ margin: "0 0 4px", fontSize: 12, color: "#666" }}>{selected.sector}</p>
+                <div style={{ display: "flex", gap: 6 }}>
                   {selected.nueva && <Badge color="#BA7517">Nueva</Badge>}
                 </div>
               </div>
             </div>
+            {selected.imgs?.length > 0 && (
+              <div style={{ display: "flex", gap: 8, marginBottom: 16, overflowX: "auto" }}>
+                {selected.imgs.map((img, i) => (
+                  <img key={i} src={img} alt="" style={{ width: 140, height: 90, objectFit: "cover", borderRadius: 8, flexShrink: 0 }} />
+                ))}
+              </div>
+            )}
+            <p style={{ fontSize: 13, color: "#555", lineHeight: 1.6, marginBottom: 16 }}>{selected.desc}</p>
 
             <div style={{ background: "#F8F9FA", borderRadius: 12, padding: "16px", marginBottom: 16 }}>
               <p style={{ margin: "0 0 4px", fontSize: 12, color: "#888", fontWeight: 600 }}>MATCH</p>
@@ -879,6 +953,7 @@ function RecomendacionesPage({ user }) {
 // ==================== MI CLÚSTER ====================
 function MiClusterPage({ user }) {
   const cluster = CLUSTERS.find(c => c.titulo === user.cluster) || CLUSTERS[0];
+  const [selectedMember, setSelectedMember] = useState(null);
   const members = [
     { initials: "CR", name: "Hotel Brisas Marinas", sub: `${cluster.titulo} · El Rodadero`, match: 92, status: "TU", connected: false },
     { initials: "HC", name: "Hotel Casa Bambú", sub: `${cluster.titulo} · El Rodadero`, match: 88, status: "CONECTADO", connected: true },
@@ -928,7 +1003,10 @@ function MiClusterPage({ user }) {
       <p style={{ fontSize: 14, color: "#666", marginBottom: 16 }}>Empresas similares a la tuya en sector y etapa. Haz clic en una para ver el detalle.</p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
         {members.map(m => (
-          <div key={m.initials} style={{ background: "#fff", borderRadius: 12, padding: "1rem", border: "1px solid #EAEAEA", cursor: "pointer" }}>
+          <div key={m.initials} onClick={() => setSelectedMember(m)} style={{ background: "#fff", borderRadius: 12, padding: "1rem", border: "1px solid #EAEAEA", cursor: "pointer", transition: "box-shadow .15s" }}
+            onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.1)"}
+            onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}
+          >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
               <Avatar name={m.initials} size={36} color={cluster.color} />
               <span style={{ fontSize: 12, fontWeight: 700, color: "#1A1A2E" }}>{m.match}%</span>
@@ -946,17 +1024,56 @@ function MiClusterPage({ user }) {
           </div>
         ))}
       </div>
+
+      {/* Member detail modal */}
+      {selectedMember && (
+        <div onClick={() => setSelectedMember(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 20, width: "100%", maxWidth: 480, padding: "2rem", position: "relative" }}>
+            <button onClick={() => setSelectedMember(null)} style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#888" }}>×</button>
+            <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 20 }}>
+              <Avatar name={selectedMember.initials} size={56} color={cluster.color} />
+              <div>
+                <h2 style={{ margin: "0 0 4px", fontSize: 18 }}>{selectedMember.name}</h2>
+                <p style={{ margin: 0, fontSize: 13, color: "#888" }}>{selectedMember.sub}</p>
+                <span style={{ display: "inline-block", marginTop: 6, background: cluster.bgLight, color: cluster.color, borderRadius: 20, padding: "3px 12px", fontSize: 12, fontWeight: 600 }}>{selectedMember.match}% match</span>
+              </div>
+            </div>
+            {selectedMember.imgs && (
+              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                {selectedMember.imgs.map((img, i) => (
+                  <img key={i} src={img} alt="" style={{ width: "50%", height: 120, objectFit: "cover", borderRadius: 10 }} />
+                ))}
+              </div>
+            )}
+            <div style={{ background: "#F8F9FA", borderRadius: 10, padding: "14px 16px", marginBottom: 16 }}>
+              {[["Sector", cluster.titulo], ["Etapa", "Madurez"], ["Ubicación", selectedMember.sub.split("· ")[1] || "Santa Marta"], ["Estado conexión", selectedMember.status]].map(([k, v]) => (
+                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #EAEAEA" }}>
+                  <span style={{ fontSize: 12, color: "#888" }}>{k}</span>
+                  <span style={{ fontSize: 13, fontWeight: 500 }}>{v}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              {!selectedMember.connected && selectedMember.status !== "TU" && (
+                <Btn full onClick={() => setSelectedMember(null)}>Solicitar conexión</Btn>
+              )}
+              <Btn variant="secondary" full onClick={() => setSelectedMember(null)}>Cerrar</Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ==================== CONEXIONES ====================
 function ConexionesPage({ user }) {
-  const connections = [
-    { initials: "HC", name: "Hotel Casa Bambú", sub: `${user.cluster || "Turismo"} · El Rodadero`, tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Hoy", badge: "green", suggestion: "Confirma con ellos el cruce de huéspedes para el puente festivo.", messages: 3 },
-    { initials: "CT", name: "Caribe Travel Co.", sub: "Agencia de turismo receptivo · Centro", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 3 días", badge: "red", suggestion: "Envía la cotización para el grupo de 10.", messages: 1 },
-    { initials: "DL", name: "Doña Lucía", sub: "Lavandería a domicilio · Bastidas", tipo: "Proveedor", status: "Pendiente", lastInteraction: "Hace 5 días", badge: "yellow", suggestion: "Acepta la solicitud de conexión pendiente.", messages: 0 },
-  ];
+  const [selectedConn, setSelectedConn] = useState(null);
+  const [connections, setConnections] = useState([
+    { initials: "HC", name: "Hotel Casa Bambú", sub: `${user.cluster || "Turismo"} · El Rodadero`, tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Hoy", badge: "green", suggestion: "Confirma con ellos el cruce de huéspedes para el puente festivo.", messages: 3, whatsapp: "3158709635" },
+    { initials: "CT", name: "Caribe Travel Co.", sub: "Agencia de turismo receptivo · Centro", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 3 días", badge: "red", suggestion: "Envía la cotización para el grupo de 10.", messages: 1, whatsapp: "3142345678" },
+    { initials: "DL", name: "Doña Lucía", sub: "Lavandería a domicilio · Bastidas", tipo: "Proveedor", status: "Pendiente", lastInteraction: "Hace 5 días", badge: "yellow", suggestion: "Acepta la solicitud de conexión pendiente.", messages: 0, whatsapp: "3104567890" },
+  ]);
 
   const stats = [
     { val: 3, label: "Activas", color: "#4CAF50" },
@@ -970,7 +1087,7 @@ function ConexionesPage({ user }) {
   return (
     <div style={{ padding: "2rem", maxWidth: 900, margin: "0 auto" }}>
       <h1 style={{ fontSize: 26, marginBottom: 4 }}>Mis conexiones</h1>
-      <p style={{ color: "#666", fontSize: 14, marginBottom: 20 }}>7 negocios en tu red</p>
+      <p style={{ color: "#666", fontSize: 14, marginBottom: 20 }}>{connections.length} negocios en tu red</p>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 24 }}>
         {stats.map(s => (
@@ -1020,9 +1137,168 @@ function ConexionesPage({ user }) {
               </div>
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
-              <Btn variant="secondary" small onClick={() => window.open(`https://wa.me/573000000000`)}>WhatsApp</Btn>
-              <Btn variant="ghost" small>Pausar</Btn>
-              <span style={{ marginLeft: "auto", fontSize: 13, color: "#0F9B8E", cursor: "pointer", fontWeight: 600, alignSelf: "center" }}>Ver detalle →</span>
+              <Btn variant="secondary" small onClick={() => window.open(`https://wa.me/57${c.whatsapp || "3000000000"}`, "_blank")}>WhatsApp</Btn>
+              <Btn variant="ghost" small onClick={() => {
+                const idx = connections.indexOf(c);
+                const updated = [...connections];
+                updated[idx] = { ...c, status: c.status === "Activa" ? "Pausada" : "Activa" };
+                setConnections(updated);
+              }}>{c.status === "Activa" ? "Pausar" : "Reactivar"}</Btn>
+              <span onClick={() => setSelectedConn(c)} style={{ marginLeft: "auto", fontSize: 13, color: "#0F9B8E", cursor: "pointer", fontWeight: 600, alignSelf: "center" }}>Ver detalle →</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* Connection detail modal */}
+      {selectedConn && (
+        <div onClick={() => setSelectedConn(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "flex-end", zIndex: 200 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#fff", width: 420, height: "100%", overflowY: "auto", padding: "1.5rem", position: "relative" }}>
+            <button onClick={() => setSelectedConn(null)} style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#888" }}>×</button>
+
+            <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 20 }}>
+              <Avatar name={selectedConn.initials} size={52} color={tipoColor[selectedConn.tipo] || "#0F9B8E"} />
+              <div>
+                <h2 style={{ margin: "0 0 2px", fontSize: 18 }}>{selectedConn.name}</h2>
+                <p style={{ margin: 0, fontSize: 13, color: "#888" }}>{selectedConn.sub}</p>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              <Badge color={tipoColor[selectedConn.tipo] || "#0F9B8E"}>{selectedConn.tipo}</Badge>
+              <Badge color={selectedConn.status === "Activa" ? "#4CAF50" : "#FF9800"}>{selectedConn.status}</Badge>
+            </div>
+
+            <div style={{ background: "#F8F9FA", borderRadius: 10, padding: "14px 16px", marginBottom: 16 }}>
+              {[
+                ["Última interacción", selectedConn.lastInteraction],
+                ["Mensajes esta semana", selectedConn.messages + " mensajes"],
+                ["Tipo de relación", selectedConn.tipo],
+                ["Estado", selectedConn.status],
+              ].map(([k, v]) => (
+                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #EAEAEA" }}>
+                  <span style={{ fontSize: 12, color: "#888" }}>{k}</span>
+                  <span style={{ fontSize: 13, fontWeight: 500 }}>{v}</span>
+                </div>
+              ))}
+            </div>
+
+            {selectedConn.suggestion && (
+              <div style={{ background: "#F0FBF9", borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
+                <p style={{ margin: "0 0 4px", fontWeight: 600, color: "#0F9B8E", fontSize: 13 }}>El Conector sugiere:</p>
+                <p style={{ margin: 0, fontSize: 13, color: "#555" }}>{selectedConn.suggestion}</p>
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <Btn onClick={() => window.open(`https://wa.me/57${selectedConn.whatsapp}`, "_blank")}>WhatsApp</Btn>
+              <Btn variant="ghost" onClick={() => {
+                setConnections(prev => prev.map(c => c.initials === selectedConn.initials ? { ...c, status: c.status === "Activa" ? "Pausada" : "Activa" } : c));
+                setSelectedConn(null);
+              }}>{selectedConn.status === "Activa" ? "Pausar conexión" : "Reactivar"}</Btn>
+              <Btn variant="danger" onClick={() => {
+                setConnections(prev => prev.filter(c => c.initials !== selectedConn.initials));
+                setSelectedConn(null);
+              }}>Archivar</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ==================== PRODUCTOS TAB ====================
+function ProductosTab({ user, onUpdate }) {
+  const [productos, setProductos] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("rutac_productos_" + user?.id) || "[]"); } catch { return []; }
+  });
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ nombre: "", descripcion: "", precio: "", imageUrl: "" });
+  const [preview, setPreview] = useState(null);
+
+  const saveProductos = (list) => {
+    setProductos(list);
+    localStorage.setItem("rutac_productos_" + user?.id, JSON.stringify(list));
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setPreview(ev.target.result);
+      setForm(f => ({ ...f, imageUrl: ev.target.result }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const addProducto = () => {
+    if (!form.nombre.trim()) return;
+    const nuevo = { ...form, id: Date.now(), imageUrl: preview || form.imageUrl };
+    saveProductos([...productos, nuevo]);
+    setForm({ nombre: "", descripcion: "", precio: "", imageUrl: "" });
+    setPreview(null);
+    setShowForm(false);
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div>
+          <h3 style={{ margin: "0 0 4px", fontSize: 16 }}>Mis productos y servicios</h3>
+          <p style={{ margin: 0, fontSize: 13, color: "#666" }}>Agrega fotos de tus productos para que aparezcan en recomendaciones y marketplace</p>
+        </div>
+        <Btn small onClick={() => setShowForm(true)}>+ Agregar</Btn>
+      </div>
+
+      {showForm && (
+        <div style={{ background: "#F8F9FA", borderRadius: 12, padding: "1.5rem", marginBottom: 20, border: "1px solid #E0E0E0" }}>
+          <h4 style={{ margin: "0 0 16px", fontSize: 15 }}>Nuevo producto / servicio</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={base.label}>Nombre *</label>
+              <input value={form.nombre} onChange={e => setForm(f => ({...f, nombre: e.target.value}))} placeholder="Mochila Wayuu artesanal" style={base.input} />
+            </div>
+            <div>
+              <label style={base.label}>Precio (opcional)</label>
+              <input value={form.precio} onChange={e => setForm(f => ({...f, precio: e.target.value}))} placeholder="Desde $150.000 COP" style={base.input} />
+            </div>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={base.label}>Descripción</label>
+            <textarea value={form.descripcion} onChange={e => setForm(f => ({...f, descripcion: e.target.value}))} placeholder="Describe el producto o servicio..." style={{ ...base.input, minHeight: 80, resize: "vertical" }} />
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label style={base.label}>Foto del producto</label>
+            <input type="file" accept="image/*" onChange={handleImageChange} style={{ fontSize: 13 }} />
+            {preview && <img src={preview} alt="" style={{ marginTop: 10, width: 160, height: 110, objectFit: "cover", borderRadius: 8 }} />}
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <Btn onClick={addProducto} disabled={!form.nombre.trim()}>Guardar producto</Btn>
+            <Btn variant="ghost" onClick={() => { setShowForm(false); setPreview(null); }}>Cancelar</Btn>
+          </div>
+        </div>
+      )}
+
+      {productos.length === 0 && !showForm && (
+        <div style={{ textAlign: "center", padding: "3rem", color: "#888", background: "#F8F9FA", borderRadius: 12 }}>
+          <p style={{ fontSize: 15, marginBottom: 12 }}>Aún no has agregado productos o servicios.</p>
+          <Btn small onClick={() => setShowForm(true)}>Agregar mi primer producto</Btn>
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px,1fr))", gap: 16 }}>
+        {productos.map(p => (
+          <div key={p.id} style={{ background: "#fff", borderRadius: 12, overflow: "hidden", border: "1px solid #EAEAEA", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            {p.imageUrl
+              ? <img src={p.imageUrl} alt="" style={{ width: "100%", height: 160, objectFit: "cover" }} />
+              : <div style={{ width: "100%", height: 160, background: "#F0F0F0", display: "flex", alignItems: "center", justifyContent: "center", color: "#aaa", fontSize: 13 }}>Sin foto</div>
+            }
+            <div style={{ padding: "12px 14px" }}>
+              <p style={{ margin: "0 0 4px", fontWeight: 600, fontSize: 14 }}>{p.nombre}</p>
+              {p.precio && <p style={{ margin: "0 0 4px", fontSize: 13, color: "#0F9B8E", fontWeight: 600 }}>{p.precio}</p>}
+              {p.descripcion && <p style={{ margin: 0, fontSize: 12, color: "#666" }}>{p.descripcion}</p>}
+              <button onClick={() => saveProductos(productos.filter(x => x.id !== p.id))} style={{ marginTop: 8, background: "none", border: "none", color: "#D85A30", fontSize: 12, cursor: "pointer", fontFamily: base.fontFamily }}>Eliminar</button>
             </div>
           </div>
         ))}
@@ -1190,9 +1466,45 @@ function MiNegocioPage({ user, setUserGlobal }) {
         </div>
       )}
 
-      {tab !== "General" && (
-        <div style={{ ...base.card, textAlign: "center", padding: "3rem" }}>
-          <p style={{ color: "#888", fontSize: 15 }}>Esta sección estará disponible próximamente.</p>
+      {tab === "Productos y servicios" && (
+        <ProductosTab user={user} onUpdate={setUserGlobal} />
+      )}
+
+      {tab === "Programas" && (
+        <div style={{ ...base.card }}>
+          <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>Programas de la Cámara de Comercio</h3>
+          {[
+            { nombre: "Mujeres Productivas", desc: "Programa de apoyo y financiamiento para mujeres emprendedoras del Magdalena.", estado: "Disponible", color: "#9C27B0" },
+            { nombre: "Ruta al Mercado", desc: "Conecta tu negocio con compradores institucionales y canales de distribución.", estado: "Disponible", color: "#0F9B8E" },
+            { nombre: "Formalización Express", desc: "Asistencia gratuita para formalizar tu negocio en menos de 5 días.", estado: "Activo", color: "#4CAF50" },
+          ].map(p => (
+            <div key={p.nombre} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", borderBottom: "1px solid #F5F5F5" }}>
+              <div>
+                <p style={{ margin: "0 0 4px", fontWeight: 600, fontSize: 14 }}>{p.nombre}</p>
+                <p style={{ margin: 0, fontSize: 13, color: "#666" }}>{p.desc}</p>
+              </div>
+              <span style={{ background: p.color + "18", color: p.color, borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", marginLeft: 16 }}>{p.estado}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === "Visibilidad" && (
+        <div style={{ ...base.card }}>
+          <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>Configuración de visibilidad</h3>
+          {[
+            ["Aparecer en búsquedas del Marketplace", true],
+            ["Recibir solicitudes de conexión", true],
+            ["Mostrar WhatsApp en mi perfil público", true],
+            ["Permitir que me recomienden a otros", true],
+          ].map(([label, defaultVal]) => (
+            <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid #F5F5F5" }}>
+              <span style={{ fontSize: 14, color: "#333" }}>{label}</span>
+              <div style={{ width: 44, height: 24, borderRadius: 12, background: defaultVal ? "#0F9B8E" : "#ddd", position: "relative", cursor: "pointer" }}>
+                <div style={{ width: 20, height: 20, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: defaultVal ? 22 : 2, transition: "left .2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -1649,6 +1961,13 @@ export default function App() {
   const [screen, setScreen] = useState("loading");
   const [user, setUser] = useState(null);
   const [page, setPage] = useState("Inicio");
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("rutac_dark") === "1");
+
+  const toggleDark = () => setDarkMode(d => {
+    const next = !d;
+    localStorage.setItem("rutac_dark", next ? "1" : "0");
+    return next;
+  });
 
   useEffect(() => {
     // Check active Supabase session on mount
@@ -1701,7 +2020,7 @@ export default function App() {
       Cargando...
     </div>
   );
-  if (screen === "login") return <LoginPage onLogin={login} onRegister={() => setScreen("register")} />;
+  if (screen === "login") return <LoginPage onLogin={login} onRegister={() => setScreen("register")} darkMode={darkMode} onToggleDark={toggleDark} />;
   if (screen === "register") return <RegisterPage onDone={login} onLogin={() => setScreen("login")} />;
 
   if (user?.role === "admin") return <AdminDashboard onLogout={logout} />;
