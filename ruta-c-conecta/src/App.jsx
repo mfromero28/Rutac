@@ -183,6 +183,7 @@ function LoginPage({ onLogin, onRegister, darkMode, onToggleDark }) {
 
     const user = {
       ...perfil,
+      id: data.user.id,
       email: data.user.email,
       razonSocial: perfil?.razon_social || perfil?.razonSocial || data.user.user_metadata?.razon_social || "Usuario",
       role: perfil?.role || data.user.user_metadata?.role || "user",
@@ -1354,7 +1355,20 @@ function ProductosTab({ user, onUpdate }) {
 function MiNegocioPage({ user, setUserGlobal }) {
   const [tab, setTab] = useState("General");
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ ...user });
+  const [form, setForm] = useState(() => ({
+    ...user,
+    // Normalize snake_case → camelCase from Supabase
+    razonSocial: user.razonSocial || user.razon_social || "",
+    municipio: user.municipio?.trim() || "Santa Marta",
+    barrio: user.barrio?.trim() || "",
+    cluster: user.cluster || "",
+    etapa: user.etapa || "Inicio",
+    whatsapp: user.whatsapp || "",
+    descripcion: user.descripcion || "",
+    tiempoOperando: user.tiempoOperando || user.tiempo_operando || "",
+    nit: user.nit || "",
+    completitud: user.completitud || 70,
+  }));
   const [errors, setErrors] = useState({});
   const [saved, setSaved] = useState(false);
 
@@ -1373,33 +1387,57 @@ function MiNegocioPage({ user, setUserGlobal }) {
 
   const save = async () => {
     if (!validate()) return;
-    const { error } = await supabase
-      .from("perfiles")
-      .update({
-        razon_social: form.razonSocial || form.razon_social,
-        cluster: form.cluster,
-        etapa: form.etapa,
-        municipio: form.municipio,
-        barrio: form.barrio,
-        whatsapp: form.whatsapp,
-        descripcion: form.descripcion,
-        tiempo_operando: form.tiempoOperando,
-        nit: form.nit,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", user.id);
+    setSaved(false);
 
-    if (error) {
-      console.error("Error guardando perfil:", error);
+    // Get real user ID from Supabase session if not in user object
+    let userId = user.id;
+    if (!userId || userId === "undefined") {
+      const { data: { session } } = await supabase.auth.getSession();
+      userId = session?.user?.id;
+    }
+    if (!userId) {
+      alert("Error: no se pudo identificar tu cuenta. Recarga la página.");
       return;
     }
 
-    const updated = { ...form, razonSocial: form.razonSocial || form.razon_social };
+    const payload = {
+      razon_social: form.razonSocial || form.razon_social || "",
+      cluster: form.cluster || "",
+      etapa: form.etapa || "Inicio",
+      municipio: form.municipio || "",
+      barrio: form.barrio || "",
+      whatsapp: form.whatsapp || "",
+      descripcion: form.descripcion || "",
+      tiempo_operando: form.tiempoOperando || form.tiempo_operando || "",
+      nit: form.nit || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+      .from("perfiles")
+      .update(payload)
+      .eq("id", userId);
+
+    if (error) {
+      console.error("Error guardando perfil:", error.message);
+      alert("Error al guardar: " + error.message);
+      return;
+    }
+
+    const updated = {
+      ...user,
+      ...form,
+      ...payload,
+      id: userId,
+      razonSocial: payload.razon_social,
+      razon_social: payload.razon_social,
+      tiempoOperando: payload.tiempo_operando,
+    };
     saveCurrent(updated);
     setUserGlobal(updated);
     setEditing(false);
     setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    setTimeout(() => setSaved(false), 4000);
   };
 
   const completitud = user.completitud || 70;
@@ -1414,7 +1452,7 @@ function MiNegocioPage({ user, setUserGlobal }) {
           <p style={{ margin: "0 0 10px", fontSize: 13, color: "#888" }}>{user.cluster} · {user.etapa} · {user.municipio}</p>
           <div style={{ display: "flex", gap: 10 }}>
             {!editing && <Btn small onClick={() => setEditing(true)}>Editar perfil</Btn>}
-            {editing && <><Btn small onClick={save}>Guardar cambios</Btn><Btn variant="ghost" small onClick={() => { setEditing(false); setForm({ ...user }); }}>Cancelar</Btn></>}
+            {editing && <><Btn small onClick={save}>Guardar cambios</Btn><Btn variant="ghost" small onClick={() => { setEditing(false); setForm({ ...user, razonSocial: user.razonSocial || user.razon_social || "", municipio: user.municipio || "", barrio: user.barrio || "", tiempoOperando: user.tiempoOperando || user.tiempo_operando || "" }); }}>Cancelar</Btn></>}
           </div>
           {saved && <p style={{ color: "#0F9B8E", fontSize: 13, marginTop: 8, fontWeight: 600 }}>Cambios guardados correctamente.</p>}
         </div>
@@ -1471,9 +1509,15 @@ function MiNegocioPage({ user, setUserGlobal }) {
                   </select>
                 </Field>
                 <Field label="Barrio o vereda">
-                  <select value={form.barrio || ""} onChange={e => update("barrio", e.target.value)} style={base.input}>
-                    <option value="">Selecciona</option>
-                    {(MUNICIPIOS_BARRIOS[form.municipio] || []).map(b => <option key={b} value={b}>{b}</option>)}
+                  <select
+                    value={form.barrio || ""}
+                    onChange={e => update("barrio", e.target.value)}
+                    style={base.input}
+                  >
+                    <option value="">Selecciona un barrio</option>
+                    {(MUNICIPIOS_BARRIOS[form.municipio] || MUNICIPIOS_BARRIOS["Santa Marta"]).map(b => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
                   </select>
                 </Field>
               </div>
@@ -1493,11 +1537,11 @@ function MiNegocioPage({ user, setUserGlobal }) {
           ) : (
             <div>
               {[
-                ["NOMBRE", user.razonSocial],
+                ["NOMBRE", user.razonSocial || user.razon_social],
                 ["NIT", user.nit || "—"],
                 ["SECTOR", user.cluster],
                 ["ETAPA", user.etapa],
-                ["TIEMPO OPERANDO", user.tiempoOperando],
+                ["TIEMPO OPERANDO", user.tiempoOperando || user.tiempo_operando],
                 ["MUNICIPIO", user.municipio],
                 ["BARRIO", user.barrio],
                 ["WHATSAPP", user.whatsapp ? `+57 ${user.whatsapp}` : "—"],
@@ -2155,7 +2199,7 @@ export default function App() {
           .select("*")
           .eq("id", session.user.id)
           .single();
-        const u = { ...perfil, email: session.user.email, razonSocial: perfil?.razon_social || session.user.user_metadata?.razon_social || "Usuario", role: perfil?.role || session.user.user_metadata?.role || "user" };
+        const u = { ...perfil, id: session.user.id, email: session.user.email, razonSocial: perfil?.razon_social || session.user.user_metadata?.razon_social || "Usuario", role: perfil?.role || session.user.user_metadata?.role || "user" };
         setUser(u);
         saveCurrent(u);
         setScreen("app");
