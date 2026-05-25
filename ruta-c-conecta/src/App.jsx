@@ -1363,20 +1363,35 @@ function ConexionesPage({ user }) {
 }
 
 // ==================== PRODUCTOS TAB ====================
+// Products are stored in Supabase tabla "productos" so ALL users see them
 function ProductosTab({ user, onUpdate }) {
-  const [productos, setProductos] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("rutac_productos_" + user?.id) || "[]"); } catch { return []; }
-  });
+  const [productos, setProductos] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ nombre: "", descripcion: "", precio: "", imageUrl: "" });
   const [preview, setPreview] = useState(null);
+  const [saving, setSaving] = useState(false);
 
-  const saveProductos = (list) => {
-    setProductos(list);
-    localStorage.setItem("rutac_productos_" + user?.id, JSON.stringify(list));
-    // Notify marketplace to refresh immediately
-    window.dispatchEvent(new Event("storage"));
+  // Load from Supabase on mount
+  const cargarProductos = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("productos")
+      .select("*")
+      .eq("perfil_id", user.id)
+      .order("created_at", { ascending: false });
+    if (!error && data) {
+      setProductos(data);
+      // Also mirror to localStorage for offline/speed access
+      localStorage.setItem("rutac_productos_" + user.id, JSON.stringify(data.map(p => ({
+        id: p.id, nombre: p.nombre, descripcion: p.descripcion, precio: p.precio, imageUrl: p.imagen_url
+      }))));
+      window.dispatchEvent(new Event("storage"));
+    }
+    setLoading(false);
   };
+
+  useEffect(() => { cargarProductos(); }, [user.id]);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -1389,13 +1404,50 @@ function ProductosTab({ user, onUpdate }) {
     reader.readAsDataURL(file);
   };
 
-  const addProducto = () => {
+  const addProducto = async () => {
     if (!form.nombre.trim()) return;
-    const nuevo = { ...form, id: Date.now(), imageUrl: preview || form.imageUrl };
-    saveProductos([...productos, nuevo]);
+    setSaving(true);
+    const { data, error } = await supabase
+      .from("productos")
+      .insert({
+        perfil_id: user.id,
+        nombre: form.nombre.trim(),
+        descripcion: form.descripcion.trim() || null,
+        precio: form.precio.trim() || null,
+        imagen_url: preview || form.imageUrl || null,
+      })
+      .select()
+      .single();
+
+    if (!error && data) {
+      const updated = [data, ...productos];
+      setProductos(updated);
+      // Mirror to localStorage
+      localStorage.setItem("rutac_productos_" + user.id, JSON.stringify(updated.map(p => ({
+        id: p.id, nombre: p.nombre, descripcion: p.descripcion, precio: p.precio, imageUrl: p.imagen_url
+      }))));
+      window.dispatchEvent(new Event("storage"));
+    } else {
+      console.error("Error guardando producto:", error?.message);
+      alert("Error al guardar: " + (error?.message || "intenta de nuevo"));
+    }
+
     setForm({ nombre: "", descripcion: "", precio: "", imageUrl: "" });
     setPreview(null);
     setShowForm(false);
+    setSaving(false);
+  };
+
+  const eliminarProducto = async (prod) => {
+    const { error } = await supabase.from("productos").delete().eq("id", prod.id);
+    if (!error) {
+      const updated = productos.filter(p => p.id !== prod.id);
+      setProductos(updated);
+      localStorage.setItem("rutac_productos_" + user.id, JSON.stringify(updated.map(p => ({
+        id: p.id, nombre: p.nombre, descripcion: p.descripcion, precio: p.precio, imageUrl: p.imagen_url
+      }))));
+      window.dispatchEvent(new Event("storage"));
+    }
   };
 
   return (
@@ -1403,7 +1455,7 @@ function ProductosTab({ user, onUpdate }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <div>
           <h3 style={{ margin: "0 0 4px", fontSize: 16 }}>Mis productos y servicios</h3>
-          <p style={{ margin: 0, fontSize: 13, color: "#666" }}>Agrega fotos de tus productos para que aparezcan en recomendaciones y marketplace</p>
+          <p style={{ margin: 0, fontSize: 13, color: "#666" }}>Aparecen en el Marketplace y son visibles para todos los emprendedores</p>
         </div>
         <Btn small onClick={() => setShowForm(true)}>+ Agregar</Btn>
       </div>
@@ -1431,15 +1483,18 @@ function ProductosTab({ user, onUpdate }) {
             {preview && <img src={preview} alt="" style={{ marginTop: 10, width: 160, height: 110, objectFit: "cover", borderRadius: 8 }} />}
           </div>
           <div style={{ display: "flex", gap: 10 }}>
-            <Btn onClick={addProducto} disabled={!form.nombre.trim()}>Guardar producto</Btn>
+            <Btn onClick={addProducto} disabled={!form.nombre.trim() || saving}>{saving ? "Guardando..." : "Guardar producto"}</Btn>
             <Btn variant="ghost" onClick={() => { setShowForm(false); setPreview(null); }}>Cancelar</Btn>
           </div>
         </div>
       )}
 
-      {productos.length === 0 && !showForm && (
+      {loading && <p style={{ color: "#888", fontSize: 14, textAlign: "center", padding: "2rem" }}>Cargando productos...</p>}
+
+      {!loading && productos.length === 0 && !showForm && (
         <div style={{ textAlign: "center", padding: "3rem", color: "#888", background: "#F8F9FA", borderRadius: 12 }}>
           <p style={{ fontSize: 15, marginBottom: 12 }}>Aún no has agregado productos o servicios.</p>
+          <p style={{ fontSize: 13, marginBottom: 16, color: "#aaa" }}>Cuando los agregues, serán visibles para todos en el Marketplace.</p>
           <Btn small onClick={() => setShowForm(true)}>Agregar mi primer producto</Btn>
         </div>
       )}
@@ -1447,15 +1502,15 @@ function ProductosTab({ user, onUpdate }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px,1fr))", gap: 16 }}>
         {productos.map(p => (
           <div key={p.id} style={{ background: "#fff", borderRadius: 12, overflow: "hidden", border: "1px solid #EAEAEA", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-            {p.imageUrl
-              ? <img src={p.imageUrl} alt="" style={{ width: "100%", height: 160, objectFit: "cover" }} />
+            {p.imagen_url
+              ? <img src={p.imagen_url} alt="" style={{ width: "100%", height: 160, objectFit: "cover" }} />
               : <div style={{ width: "100%", height: 160, background: "#F0F0F0", display: "flex", alignItems: "center", justifyContent: "center", color: "#aaa", fontSize: 13 }}>Sin foto</div>
             }
             <div style={{ padding: "12px 14px" }}>
               <p style={{ margin: "0 0 4px", fontWeight: 600, fontSize: 14 }}>{p.nombre}</p>
               {p.precio && <p style={{ margin: "0 0 4px", fontSize: 13, color: "#0F9B8E", fontWeight: 600 }}>{p.precio}</p>}
               {p.descripcion && <p style={{ margin: 0, fontSize: 12, color: "#666" }}>{p.descripcion}</p>}
-              <button onClick={() => saveProductos(productos.filter(x => x.id !== p.id))} style={{ marginTop: 8, background: "none", border: "none", color: "#D85A30", fontSize: 12, cursor: "pointer", fontFamily: base.fontFamily }}>Eliminar</button>
+              <button onClick={() => eliminarProducto(p)} style={{ marginTop: 8, background: "none", border: "none", color: "#D85A30", fontSize: 12, cursor: "pointer", fontFamily: base.fontFamily }}>Eliminar</button>
             </div>
           </div>
         ))}
@@ -1722,31 +1777,34 @@ function MarketplacePage({ user, allProfiles }) {
   const [selectedBiz, setSelectedBiz] = useState(null);
   const [productosMap, setProductosMap] = useState({});
 
-  // Load productos from localStorage - refresh to pick up new products immediately
-  const refreshProductos = useCallback(() => {
+  // Load productos from Supabase so ALL users see ALL products
+  const refreshProductos = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("productos")
+      .select("*, perfiles(razon_social, cluster, municipio, etapa, whatsapp, barrio, tiempo_operando)");
+    if (error) { console.error("Error cargando productos:", error.message); return; }
     const p = {};
-    // Load from all known Supabase profiles
-    (allProfiles || []).filter(prof => prof.role !== 'admin').forEach(prof => {
-      try {
-        const items = JSON.parse(localStorage.getItem("rutac_productos_" + prof.id) || "[]");
-        if (items.length) p[prof.id] = items;
-      } catch {}
+    (data || []).forEach(prod => {
+      if (!p[prod.perfil_id]) p[prod.perfil_id] = [];
+      p[prod.perfil_id].push({
+        id: prod.id,
+        nombre: prod.nombre,
+        descripcion: prod.descripcion,
+        precio: prod.precio,
+        imageUrl: prod.imagen_url,
+        perfil: prod.perfiles,
+      });
     });
-    // Always load own user's products (even if not yet in allProfiles)
-    try {
-      const own = JSON.parse(localStorage.getItem("rutac_productos_" + user.id) || "[]");
-      if (own.length) p[user.id] = own;
-    } catch {}
-    setProductosMap({ ...p });
-  }, [allProfiles, user.id]);
+    setProductosMap(p);
+  }, []);
 
   useEffect(() => {
     refreshProductos();
-    // Listen for storage changes from other tabs / same tab saves
+    // Re-fetch when localStorage changes (same-tab add)
     const handler = () => refreshProductos();
     window.addEventListener("storage", handler);
-    // Also poll every 1.5s for same-tab saves
-    const interval = setInterval(refreshProductos, 1500);
+    // Poll every 8s to catch adds from other users
+    const interval = setInterval(refreshProductos, 8000);
     return () => { window.removeEventListener("storage", handler); clearInterval(interval); };
   }, [refreshProductos]);
 
@@ -1769,19 +1827,17 @@ function MarketplacePage({ user, allProfiles }) {
     { id: "s15", cluster: "Turismo",            nombre: "Paquete Luna de Miel 3N",          empresa: "Mar Azul Boutique Hotel",    municipio: "Santa Marta",   etapa: "Madurez",        whatsapp: "3174567002", precio: "$1.200.000/pareja", desc: "Jacuzzi, cena romántica, desayuno en cama, spa y tour privado Tayrona.", img: "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&h=280&fit=crop" },
   ];
 
-  // ---- REAL PROFILE PRODUCTS (from Supabase users who added products) ----
-  // Include ALL profiles (including own user) so products appear immediately for everyone
+  // ---- REAL PROFILE PRODUCTS (from Supabase — visible to ALL users) ----
   const realListings = [];
-  const allProfilesWithUser = [
-    ...(allProfiles || []).filter(p => p.role !== 'admin'),
-    // Ensure current user is included even if not yet in allProfiles
-    ...((allProfiles || []).find(p => p.id === user.id) ? [] : [user]),
-  ];
-  allProfilesWithUser.forEach(prof => {
-    const prods = productosMap[prof.id] || [];
+  Object.entries(productosMap).forEach(([perfilId, prods]) => {
+    // Find profile info: from productosMap join data OR from allProfiles
+    const profFromMap = prods[0]?.perfil;
+    const profFromList = allProfiles.find(p => p.id === perfilId);
+    const prof = profFromMap || profFromList || (perfilId === user.id ? user : null);
+    if (!prof) return;
     prods.forEach((prod, idx) => {
       realListings.push({
-        id: `r_${prof.id}_${idx}`,
+        id: `r_${perfilId}_${idx}`,
         cluster: prof.cluster || "Comercio y Servicios",
         nombre: prod.nombre,
         empresa: prof.razon_social || prof.razonSocial,
@@ -1820,7 +1876,7 @@ function MarketplacePage({ user, allProfiles }) {
           // Generic colorful market image
           return "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=400&h=280&fit=crop";
         })(),
-        profileId: prof.id,
+        profileId: perfilId,
         profile: prof,
       });
     });
