@@ -1722,21 +1722,22 @@ function MarketplacePage({ user, allProfiles }) {
   const [selectedBiz, setSelectedBiz] = useState(null);
   const [productosMap, setProductosMap] = useState({});
 
-  // Load productos from localStorage - refresh every 2s to pick up new products
+  // Load productos from localStorage - refresh to pick up new products immediately
   const refreshProductos = useCallback(() => {
     const p = {};
-    (allProfiles || []).forEach(prof => {
+    // Load from all known Supabase profiles
+    (allProfiles || []).filter(prof => prof.role !== 'admin').forEach(prof => {
       try {
         const items = JSON.parse(localStorage.getItem("rutac_productos_" + prof.id) || "[]");
         if (items.length) p[prof.id] = items;
       } catch {}
     });
-    // Also load own products
+    // Always load own user's products (even if not yet in allProfiles)
     try {
       const own = JSON.parse(localStorage.getItem("rutac_productos_" + user.id) || "[]");
       if (own.length) p[user.id] = own;
     } catch {}
-    setProductosMap(p);
+    setProductosMap({ ...p });
   }, [allProfiles, user.id]);
 
   useEffect(() => {
@@ -1769,20 +1770,26 @@ function MarketplacePage({ user, allProfiles }) {
   ];
 
   // ---- REAL PROFILE PRODUCTS (from Supabase users who added products) ----
+  // Include ALL profiles (including own user) so products appear immediately for everyone
   const realListings = [];
-  (allProfiles || []).filter(p => p.id !== user.id && p.role !== 'admin').forEach(prof => {
+  const allProfilesWithUser = [
+    ...(allProfiles || []).filter(p => p.role !== 'admin'),
+    // Ensure current user is included even if not yet in allProfiles
+    ...((allProfiles || []).find(p => p.id === user.id) ? [] : [user]),
+  ];
+  allProfilesWithUser.forEach(prof => {
     const prods = productosMap[prof.id] || [];
     prods.forEach((prod, idx) => {
       realListings.push({
         id: `r_${prof.id}_${idx}`,
         cluster: prof.cluster || "Comercio y Servicios",
         nombre: prod.nombre,
-        empresa: prof.razon_social,
+        empresa: prof.razon_social || prof.razonSocial,
         municipio: prof.municipio,
         etapa: prof.etapa,
         whatsapp: prof.whatsapp,
         precio: prod.precio || "Consultar precio",
-        desc: prod.descripcion || `Producto ofrecido por ${prof.razon_social}. Contacta para más información.`,
+        desc: prod.descripcion || `Producto ofrecido por ${prof.razon_social || prof.razonSocial}. Contacta para más información.`,
         img: prod.imageUrl || (() => {
           // Generate themed Unsplash image based on product name keywords
           const kw = (prod.nombre || "").toLowerCase();
@@ -1883,7 +1890,11 @@ function MarketplacePage({ user, allProfiles }) {
                   </div>
                 )}
                 <span style={{ position: "absolute", top: 10, left: 10, background: c.color, color: "#fff", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>{p.cluster}</span>
-                {p.profileId && <span style={{ position: "absolute", top: 10, right: 10, background: "#1A1A2E", color: "#fff", borderRadius: 20, padding: "3px 10px", fontSize: 10, fontWeight: 600 }}>🔴 Ruta C</span>}
+                {p.profileId && (
+                  <span style={{ position: "absolute", top: 10, right: 10, background: p.profileId === user.id ? "#0F9B8E" : "#1A1A2E", color: "#fff", borderRadius: 20, padding: "3px 10px", fontSize: 10, fontWeight: 600 }}>
+                    {p.profileId === user.id ? "✦ Mi producto" : "🔴 Ruta C"}
+                  </span>
+                )}
               </div>
               {/* Content */}
               <div style={{ padding: "14px 16px", flex: 1, display: "flex", flexDirection: "column" }}>
@@ -2559,14 +2570,50 @@ function scoreFormalización(user) {
   return Math.min(100, score);
 }
 
-// Ruta de formalización personalizada
+// Ruta de formalización personalizada — lee localStorage para productos
 function rutaFormalización(user) {
+  let tieneProductos = false;
+  try {
+    const prods = JSON.parse(localStorage.getItem("rutac_productos_" + user?.id) || "[]");
+    tieneProductos = prods.length > 0;
+  } catch {}
+
   const pasos = [
-    { id: 1, titulo: "Registra tu WhatsApp de negocio", desc: "Un número de contacto directo aumenta la confianza de clientes y aliados.", done: !!user.whatsapp, accion: "Mi negocio → General" },
-    { id: 2, titulo: "Describe tus productos y servicios", desc: "Las fotos y precios generan más conexiones y aparecen en el Marketplace.", done: false, accion: "Mi negocio → Productos y servicios" },
-    { id: 3, titulo: "Agrega tu NIT", desc: "El NIT es necesario para facturar y contratar con empresas formales.", done: !!user.nit, accion: "Mi negocio → General" },
-    { id: 4, titulo: "Conecta con 3 aliados estratégicos", desc: "Las conexiones activas aumentan tu visibilidad y las recomendaciones del motor IA.", done: false, accion: "Ir a Recomendaciones" },
-    { id: 5, titulo: "Verifica tus datos de ubicación", desc: "El barrio y municipio correctos mejoran las recomendaciones geográficas del motor.", done: !!(user.barrio && user.municipio), accion: "Mi negocio → General" },
+    {
+      id: 1,
+      titulo: "Registra tu WhatsApp de negocio",
+      desc: "Un número de contacto directo aumenta la confianza de clientes y aliados.",
+      done: !!(user.whatsapp && user.whatsapp.length === 10),
+      accion: "Mi negocio → General",
+    },
+    {
+      id: 2,
+      titulo: "Publica tus productos y servicios",
+      desc: "Las fotos y precios generan más conexiones y aparecen en el Marketplace para todos.",
+      done: tieneProductos,
+      accion: "Mi negocio → Productos y servicios",
+    },
+    {
+      id: 3,
+      titulo: "Agrega tu NIT",
+      desc: "El NIT es necesario para facturar y contratar con empresas formales.",
+      done: !!(user.nit && user.nit.toString().length > 3),
+      accion: "Mi negocio → General",
+    },
+    {
+      id: 4,
+      titulo: "Conecta con 3 aliados estratégicos",
+      desc: "Las conexiones activas aumentan tu visibilidad y las recomendaciones del motor IA.",
+      done: false,
+      accion: "Ir a Recomendaciones",
+    },
+    {
+      id: 5,
+      titulo: "Verifica tus datos de ubicación",
+      desc: "El barrio y municipio correctos mejoran las recomendaciones geográficas del motor.",
+      done: !!(user.barrio && user.barrio.length > 2 && user.municipio && user.municipio.length > 2),
+      accion: "Mi negocio → General",
+    },
   ];
   return pasos;
 }
@@ -2982,9 +3029,17 @@ function MarketplaceBuscadorPage({ user, allProfiles }) {
 
 // ==================== FORMALIZACIÓN ====================
 function FormalizaciónPage({ user, setUserGlobal }) {
+  const [pasos, setPasos] = useState(() => rutaFormalización(user));
   const score = scoreFormalización(user);
-  const pasos = rutaFormalización(user);
   const completados = pasos.filter(p => p.done).length;
+
+  // Refresh pasos every 1.5s (catches localStorage product saves)
+  useEffect(() => {
+    const interval = setInterval(() => setPasos(rutaFormalización(user)), 1500);
+    const handler = () => setPasos(rutaFormalización(user));
+    window.addEventListener("storage", handler);
+    return () => { clearInterval(interval); window.removeEventListener("storage", handler); };
+  }, [user]);
 
   const programas = [
     { nombre: "Mujeres Productivas", entidad: "Cámara de Comercio", plazo: "30 Jun 2026", desc: "Apoyo y financiamiento para mujeres emprendedoras.", color: "#9C27B0" },
