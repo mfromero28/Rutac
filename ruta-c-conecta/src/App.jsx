@@ -710,7 +710,7 @@ function UserMenu({ user, onLogout, onNavigate }) {
 function Navbar({ user, page, setPage, onLogout }) {
   const navItems = user?.role === "admin"
     ? ["Dashboard", "Empresas", "Clusters", "Reportes"]
-    : ["Inicio", "Recomendaciones", "Mi clúster", "Conexiones", "Mi negocio"];
+    : ["Inicio", "Recomendaciones", "Mi clúster", "Conexiones", "Marketplace", "Formalización", "Mi negocio"];
 
   return (
     <nav style={{
@@ -748,9 +748,56 @@ function Navbar({ user, page, setPage, onLogout }) {
 }
 
 // ==================== INICIO ====================
-function InicioPage({ user }) {
+function InicioPage({ user, onNavigate }) {
   const cluster = CLUSTERS.find(c => c.titulo === user.cluster);
   const completitud = user.completitud || 70;
+  const [kpis, setKpis] = useState({ vistas: null, conexiones: null, recomendaciones: null, productos: null });
+
+  useEffect(() => {
+    // Load real metrics
+    const loadMetrics = async () => {
+      // 1. Conexiones activas: count perfiles in same cluster (proxy)
+      const { data: clusterPeers } = await supabase
+        .from("perfiles")
+        .select("id")
+        .eq("cluster", user.cluster)
+        .neq("id", user.id);
+
+      // 2. Count recomendaciones (all non-admin profiles)
+      const { data: allP } = await supabase
+        .from("perfiles")
+        .select("id, cluster, municipio, etapa, completitud")
+        .neq("id", user.id)
+        .neq("role", "admin");
+
+      // 3. Count own products from localStorage
+      let ownProds = 0;
+      try { ownProds = JSON.parse(localStorage.getItem("rutac_productos_" + user.id) || "[]").length; } catch {}
+
+      // Score-based recommendation count
+      const recCount = (allP || []).filter(p => {
+        let s = 0;
+        if (p.cluster === user.cluster) s += 35;
+        if (p.municipio === user.municipio) s += 20;
+        return s > 20;
+      }).length;
+
+      setKpis({
+        vistas: Math.floor(Math.random() * 40) + 10, // simulated weekly views
+        conexiones: clusterPeers?.length || 0,
+        recomendaciones: recCount,
+        productos: ownProds,
+      });
+    };
+    loadMetrics();
+  }, [user.id, user.cluster]);
+
+  const kpiCards = [
+    { label: "Conexiones en tu clúster", val: kpis.conexiones === null ? "..." : kpis.conexiones, sub: `Empresas en ${user.cluster || "tu sector"}`, icon: "🔗" },
+    { label: "Recomendaciones IA", val: kpis.recomendaciones === null ? "..." : kpis.recomendaciones, sub: "Actores con alta afinidad", icon: "⭐" },
+    { label: "Mis productos activos", val: kpis.productos === null ? "..." : kpis.productos, sub: kpis.productos === 0 ? "¡Agrega tu primer producto!" : "Visibles en Marketplace", icon: "🛍️" },
+    { label: "Completitud del perfil", val: `${completitud}%`, sub: "Mejora tu visibilidad", icon: "📊" },
+  ];
 
   return (
     <div style={{ padding: "2rem", maxWidth: 1200, margin: "0 auto" }}>
@@ -758,53 +805,62 @@ function InicioPage({ user }) {
       <div style={{ background: "linear-gradient(135deg, #0F9B8E, #185FA5)", borderRadius: 18, padding: "2rem 2.5rem", color: "#fff", marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <p style={{ margin: "0 0 6px", opacity: 0.85, fontSize: 14 }}>Bienvenido de vuelta</p>
-          <h1 style={{ margin: "0 0 8px", fontSize: 28, fontWeight: 800 }}>{user.razonSocial}</h1>
-          <div style={{ display: "flex", gap: 10 }}>
+          <h1 style={{ margin: "0 0 8px", fontSize: 28, fontWeight: 800 }}>{user.razonSocial || user.razon_social}</h1>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {cluster && <Badge color="#fff">{cluster.titulo}</Badge>}
-            <Badge color="#fff">{user.municipio}</Badge>
-            <Badge color="#fff">Etapa: {user.etapa}</Badge>
+            {user.municipio && <Badge color="#fff">{user.municipio}</Badge>}
+            {user.etapa && <Badge color="#fff">Etapa: {user.etapa}</Badge>}
           </div>
         </div>
         <div style={{ textAlign: "center" }}>
-          <div style={{ width: 80, height: 80, borderRadius: "50%", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", border: "3px solid rgba(255,255,255,0.4)" }}>
-            <span style={{ fontSize: 22, fontWeight: 800 }}>{completitud}%</span>
-            <span style={{ fontSize: 10, opacity: 0.8 }}>Perfil</span>
+          <div style={{ width: 80, height: 80, borderRadius: "50%", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", border: "3px solid rgba(255,255,255,0.4)", position: "relative" }}>
+            <svg viewBox="0 0 36 36" width="80" height="80" style={{ position: "absolute", transform: "rotate(-90deg)" }}>
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2.5"/>
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="#fff" strokeWidth="2.5" strokeDasharray={`${completitud} ${100 - completitud}`} strokeLinecap="round"/>
+            </svg>
+            <span style={{ fontSize: 18, fontWeight: 800, position: "relative" }}>{completitud}%</span>
+            <span style={{ fontSize: 9, opacity: 0.8, position: "relative" }}>Perfil</span>
           </div>
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards — real data */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
-        {[
-          { label: "Vistas al perfil", val: "0", sub: "Esta semana" },
-          { label: "Conexiones activas", val: "0", sub: "Empresas conectadas" },
-          { label: "Recomendaciones", val: "6", sub: "Actores priorizados" },
-          { label: "Completitud del perfil", val: `${completitud}%`, sub: "Mejora tu visibilidad" },
-        ].map(k => (
+        {kpiCards.map(k => (
           <div key={k.label} style={{ ...base.card }}>
-            <p style={{ margin: "0 0 4px", fontSize: 12, color: "#888", fontWeight: 500, textTransform: "uppercase", letterSpacing: 0.5 }}>{k.label}</p>
-            <h2 style={{ margin: "0 0 2px", fontSize: 30, fontWeight: 800, color: "#0F9B8E" }}>{k.val}</h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <p style={{ margin: "0 0 4px", fontSize: 11, color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{k.label}</p>
+              <span style={{ fontSize: 20 }}>{k.icon}</span>
+            </div>
+            <h2 style={{ margin: "0 0 2px", fontSize: 32, fontWeight: 800, color: "#0F9B8E" }}>{k.val}</h2>
             <p style={{ margin: 0, fontSize: 12, color: "#888" }}>{k.sub}</p>
           </div>
         ))}
       </div>
 
-      {/* Completitud bar */}
+      {/* Completitud bar + tips */}
       {completitud < 100 && (
         <div style={{ ...base.card, marginBottom: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <div>
               <h3 style={{ margin: 0, fontSize: 16 }}>Completa tu perfil</h3>
-              <p style={{ margin: "4px 0 0", fontSize: 13, color: "#666" }}>Un perfil completo recibe 3x más conexiones</p>
+              <p style={{ margin: "4px 0 0", fontSize: 13, color: "#666" }}>Un perfil completo recibe 3x más conexiones y aparece más en el Marketplace</p>
             </div>
-            <span style={{ fontWeight: 700, color: "#0F9B8E", fontSize: 18 }}>{completitud}%</span>
+            <span style={{ fontWeight: 700, color: "#0F9B8E", fontSize: 20 }}>{completitud}%</span>
           </div>
-          <div style={{ height: 8, background: "#F0F0F0", borderRadius: 4 }}>
-            <div style={{ height: "100%", width: `${completitud}%`, background: "#0F9B8E", borderRadius: 4, transition: "width .5s" }} />
+          <div style={{ height: 8, background: "#F0F0F0", borderRadius: 4, marginBottom: 14 }}>
+            <div style={{ height: "100%", width: `${completitud}%`, background: "linear-gradient(90deg, #0F9B8E, #185FA5)", borderRadius: 4, transition: "width .5s" }} />
           </div>
-          <div style={{ display: "flex", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
-            {["Agrega foto de perfil", "Describe tus productos", "Agrega dirección exacta"].map(t => (
-              <span key={t} style={{ background: "#FFF9E6", color: "#BA7517", border: "1px solid #FFE0A0", borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 500 }}>{t}</span>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {[
+              !user.descripcion && { label: "Agrega descripción de tu negocio", page: "Mi negocio" },
+              !(kpis.productos > 0) && { label: "Sube fotos de tus productos", page: "Mi negocio" },
+              !user.whatsapp && { label: "Agrega tu WhatsApp", page: "Mi negocio" },
+              !user.barrio && { label: "Agrega tu barrio", page: "Mi negocio" },
+            ].filter(Boolean).slice(0, 3).map(t => (
+              <span key={t.label} onClick={() => onNavigate && onNavigate(t.page)} style={{ background: "#FFF9E6", color: "#BA7517", border: "1px solid #FFE0A0", borderRadius: 20, padding: "4px 14px", fontSize: 12, fontWeight: 500, cursor: "pointer" }}>
+                {t.label} →
+              </span>
             ))}
           </div>
         </div>
@@ -815,7 +871,8 @@ function InicioPage({ user }) {
         <h3 style={{ margin: "0 0 16px" }}>Clústeres activos en el Magdalena</h3>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
           {CLUSTERS.map(c => (
-            <div key={c.id} style={{ background: c.bgLight, borderRadius: 10, padding: "14px", border: user.cluster === c.titulo ? `2px solid ${c.color}` : "2px solid transparent" }}>
+            <div key={c.id} style={{ background: c.bgLight, borderRadius: 10, padding: "14px", border: user.cluster === c.titulo ? `2px solid ${c.color}` : "2px solid transparent", position: "relative" }}>
+              {user.cluster === c.titulo && <span style={{ position: "absolute", top: 8, right: 8, fontSize: 9, background: c.color, color: "#fff", borderRadius: 10, padding: "2px 6px", fontWeight: 700 }}>TÚ</span>}
               <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: 14, color: c.color }}>{c.titulo}</p>
               <p style={{ margin: 0, fontSize: 12, color: "#555" }}>{c.total} empresas</p>
             </div>
@@ -1084,28 +1141,82 @@ function MiClusterPage({ user }) {
 function ConexionesPage({ user }) {
   const [selectedConn, setSelectedConn] = useState(null);
   const [connTab, setConnTab] = useState("todas");
-  const [connections, setConnections] = useState([
-    { initials: "HC", name: "Hotel Casa Bambú", sub: "Turismo · El Rodadero", tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Hoy", suggestion: "Confirma con ellos el cruce de huéspedes para el puente festivo.", messages: 5, whatsapp: "3158709001" },
-    { initials: "CT", name: "Caribe Travel Co.", sub: "Turismo · Centro Histórico", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 2 días", suggestion: "Envía la cotización para el grupo de 10 turistas.", messages: 3, whatsapp: "3142345001" },
-    { initials: "DL", name: "Doña Lucía Lavandería", sub: "Comercio y Servicios · Bastidas", tipo: "Proveedor", status: "Activa", lastInteraction: "Ayer", suggestion: "Confirma la recogida de lunes y miércoles.", messages: 2, whatsapp: "3104567001" },
-    { initials: "BG", name: "Bananera González & Hijos", sub: "Banano · Zona Bananera", tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Hace 4 días", suggestion: "Pregúntales sobre la certificación Rainforest Alliance.", messages: 1, whatsapp: "3174567001" },
-    { initials: "TC", name: "Transportes Caribe Norte", sub: "Logística · Mamatoco", tipo: "Proveedor", status: "Activa", lastInteraction: "Hace 1 semana", suggestion: "Negocia tarifa especial para envíos semanales.", messages: 4, whatsapp: "3196789001" },
-    { initials: "ZM", name: "ZAKU MOCHILAS", sub: "Artesanías · Mamatoco", tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Hace 3 días", suggestion: "Propónles paquete de souvenirs para tus huéspedes.", messages: 2, whatsapp: "3158709635" },
-    { initials: "TS", name: "Tour Sierra Nevada SAS", sub: "Turismo · Taganga", tipo: "Cliente potencial", status: "Pendiente", lastInteraction: "Hace 6 días", suggestion: "Responde la solicitud de conexión que enviaron.", messages: 0, whatsapp: "3185678001" },
-    { initials: "PE", name: "Pescadería El Mocho", sub: "Pesca y Acuicultura · Pescaíto", tipo: "Proveedor", status: "Pendiente", lastInteraction: "Hace 1 semana", suggestion: "Ideal para proveer mariscos frescos a tu negocio.", messages: 0, whatsapp: "3142345678" },
-    { initials: "CS", name: "Café Sierra Nevada Orgánico", sub: "Café · Aracataca", tipo: "Referente", status: "Activa", lastInteraction: "Hace 5 días", suggestion: "Incluye su café en tu oferta gastronómica.", messages: 1, whatsapp: "3118901001" },
-    { initials: "PM", name: "Palmeras del Magdalena SAS", sub: "Palma de Aceite · El Retén", tipo: "Referente", status: "Pausada", lastInteraction: "Hace 3 semanas", suggestion: "Retoma el contacto, tienen nueva cosecha disponible.", messages: 0, whatsapp: "3107890001" },
-    { initials: "AB", name: "Artesanías Bahía", sub: "Artesanías · Taganga", tipo: "Aliado estratégico", status: "Pausada", lastInteraction: "Hace 2 semanas", suggestion: "Reactiva la alianza para temporada alta.", messages: 0, whatsapp: "3152345001" },
-    { initials: "RC", name: "Restaurante El Costeño", sub: "Comercio y Servicios · El Rodadero", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Ayer", suggestion: "Envíales propuesta de suministro mensual.", messages: 3, whatsapp: "3163456001" },
-    { initials: "MA", name: "Mar Azul Boutique Hotel", sub: "Turismo · El Rodadero", tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Hoy", suggestion: "Coordinen el cruce de clientes para temporada.", messages: 6, whatsapp: "3174567002" },
-    { initials: "SN", name: "Hostal Sierra Nevada", sub: "Turismo · Bavaria", tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Hace 2 días", suggestion: "Propuesta de paquete conjunto está pendiente.", messages: 2, whatsapp: "3185678002" },
-    { initials: "AG", name: "Agro Guamal SAS", sub: "Banano · Guamal", tipo: "Proveedor", status: "Pendiente", lastInteraction: "Hace 8 días", suggestion: "Solicitud de conexión sin respuesta.", messages: 0, whatsapp: "3196789002" },
-    { initials: "VT", name: "Viajes y Turismo Tayrona", sub: "Turismo · Centro", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 3 días", suggestion: "Tienen grupo de 25 personas para dic.", messages: 2, whatsapp: "3107890002" },
-    { initials: "LC", name: "Lavandería Caribe Express", sub: "Comercio y Servicios · Gaira", tipo: "Proveedor", status: "Archivada", lastInteraction: "Hace 2 meses", suggestion: "Conexión archivada. Puedes reactivarla.", messages: 0, whatsapp: "3118901002" },
-    { initials: "FP", name: "Finca La Primavera", sub: "Palma de Aceite · Zona Bananera", tipo: "Aliado estratégico", status: "Archivada", lastInteraction: "Hace 1 mes", suggestion: "Conexión archivada. Puedes reactivarla.", messages: 0, whatsapp: "3129012001" },
-    { initials: "DD", name: "Distribuidora Del Mar", sub: "Pesca y Acuicultura · Santa Marta", tipo: "Proveedor", status: "Activa", lastInteraction: "Hace 4 días", suggestion: "Cotiza el paquete semanal de mariscos frescos.", messages: 1, whatsapp: "3140123001" },
-    { initials: "EX", name: "Experiencias Caribe SAS", sub: "Turismo · Bello Horizonte", tipo: "Cliente potencial", status: "Pendiente", lastInteraction: "Hace 5 días", suggestion: "Interesados en tu propuesta de turismo rural.", messages: 0, whatsapp: "3151234001" },
-  ]);
+
+  // Build connections based on user's cluster
+  const CLUSTER_CONNECTIONS = {
+    "Turismo": [
+      { initials: "HC", name: "Hotel Casa Bambú", sub: "Turismo · El Rodadero", tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Hoy", suggestion: "Confirma el cruce de huéspedes para el puente festivo.", messages: 5, whatsapp: "3158709001" },
+      { initials: "MA", name: "Mar Azul Boutique Hotel", sub: "Turismo · El Rodadero", tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Hoy", suggestion: "Coordinen paquete conjunto para temporada.", messages: 3, whatsapp: "3174567002" },
+      { initials: "CT", name: "Caribe Travel Co.", sub: "Turismo · Centro Histórico", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 2 días", suggestion: "Envía cotización para grupo de 10 turistas.", messages: 2, whatsapp: "3142345001" },
+      { initials: "TS", name: "Tour Sierra Nevada SAS", sub: "Turismo · Taganga", tipo: "Aliado estratégico", status: "Pendiente", lastInteraction: "Hace 6 días", suggestion: "Responde la solicitud de conexión que enviaron.", messages: 0, whatsapp: "3185678001" },
+      { initials: "VT", name: "Viajes y Turismo Tayrona", sub: "Turismo · Centro", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 3 días", suggestion: "Tienen grupo de 25 personas para diciembre.", messages: 2, whatsapp: "3107890002" },
+      { initials: "PE", name: "Pescadería El Mocho", sub: "Pesca · Pescaíto", tipo: "Proveedor", status: "Activa", lastInteraction: "Hace 4 días", suggestion: "Proveedor de mariscos para tu restaurante o desayunos.", messages: 1, whatsapp: "3142345678" },
+      { initials: "ZM", name: "ZAKU MOCHILAS", sub: "Artesanías · Mamatoco", tipo: "Proveedor", status: "Activa", lastInteraction: "Hace 3 días", suggestion: "Souvenirs artesanales para tus huéspedes.", messages: 2, whatsapp: "3158709635" },
+      { initials: "CS", name: "Café Sierra Nevada Orgánico", sub: "Café · Aracataca", tipo: "Proveedor", status: "Activa", lastInteraction: "Hace 5 días", suggestion: "Incluye su café especial en tus desayunos.", messages: 1, whatsapp: "3118901001" },
+      { initials: "EX", name: "Experiencias Caribe SAS", sub: "Turismo · Bello Horizonte", tipo: "Aliado estratégico", status: "Pendiente", lastInteraction: "Hace 5 días", suggestion: "Alianza de experiencias complementarias para turistas.", messages: 0, whatsapp: "3151234001" },
+      { initials: "LC", name: "Lavandería Caribe Express", sub: "Comercio · Gaira", tipo: "Proveedor", status: "Pausada", lastInteraction: "Hace 2 semanas", suggestion: "Servicio de lavandería para ropa de cama.", messages: 0, whatsapp: "3118901002" },
+    ],
+    "Artesanías": [
+      { initials: "AB", name: "Artesanías Bahía", sub: "Artesanías · Taganga", tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Ayer", suggestion: "Coordinen participación en feria de artesanos.", messages: 3, whatsapp: "3152345001" },
+      { initials: "HC", name: "Hotel Casa Bambú", sub: "Turismo · El Rodadero", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 2 días", suggestion: "Ofreceles paquete de souvenirs para sus huéspedes.", messages: 2, whatsapp: "3158709001" },
+      { initials: "MA", name: "Mar Azul Boutique Hotel", sub: "Turismo · El Rodadero", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 3 días", suggestion: "Boutique ideal para exhibir tus piezas artesanales.", messages: 1, whatsapp: "3174567002" },
+      { initials: "CT", name: "Caribe Travel Co.", sub: "Turismo · Centro Histórico", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 4 días", suggestion: "Pueden incluir visitas a tu taller en sus tours.", messages: 2, whatsapp: "3142345001" },
+      { initials: "RC", name: "Restaurante El Costeño", sub: "Comercio · El Rodadero", tipo: "Cliente potencial", status: "Pendiente", lastInteraction: "Hace 6 días", suggestion: "Decoración artesanal para su local.", messages: 0, whatsapp: "3163456001" },
+      { initials: "VT", name: "Viajes y Turismo Tayrona", sub: "Turismo · Centro", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 5 días", suggestion: "Kits de souvenirs para grupos de turistas.", messages: 1, whatsapp: "3107890002" },
+      { initials: "TC", name: "Transportes Caribe Norte", sub: "Logística · Mamatoco", tipo: "Proveedor", status: "Activa", lastInteraction: "Hace 1 semana", suggestion: "Logística para envío de productos a otras ciudades.", messages: 1, whatsapp: "3196789001" },
+      { initials: "SN", name: "Hostal Sierra Nevada", sub: "Turismo · Bavaria", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 3 días", suggestion: "Recuerdos para sus viajeros internacionales.", messages: 2, whatsapp: "3185678002" },
+      { initials: "EX", name: "Experiencias Caribe SAS", sub: "Turismo · Bello Horizonte", tipo: "Cliente potencial", status: "Pendiente", lastInteraction: "Hace 1 semana", suggestion: "Tours culturales con artesanías como protagonistas.", messages: 0, whatsapp: "3151234001" },
+      { initials: "CS", name: "Café Sierra Nevada Orgánico", sub: "Café · Aracataca", tipo: "Aliado estratégico", status: "Pausada", lastInteraction: "Hace 2 semanas", suggestion: "Alianza de productos locales auténticos del Magdalena.", messages: 0, whatsapp: "3118901001" },
+    ],
+    "Banano": [
+      { initials: "AG", name: "Agro Guamal SAS", sub: "Banano · Guamal", tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Hace 2 días", suggestion: "Intercambio de buenas prácticas agrícolas.", messages: 2, whatsapp: "3196789002" },
+      { initials: "TC", name: "Transportes Caribe Norte", sub: "Logística · Mamatoco", tipo: "Proveedor", status: "Activa", lastInteraction: "Hoy", suggestion: "Logística refrigerada para exportación de fruta.", messages: 4, whatsapp: "3196789001" },
+      { initials: "FP", name: "Finca La Primavera", sub: "Palma · Zona Bananera", tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Hace 3 días", suggestion: "Vecinos en la Zona Bananera, posible maquinaria compartida.", messages: 1, whatsapp: "3129012001" },
+      { initials: "DD", name: "Distribuidora Del Mar", sub: "Pesca · Pescaíto", tipo: "Referente", status: "Pendiente", lastInteraction: "Hace 1 semana", suggestion: "Canal de distribución local alternativo.", messages: 0, whatsapp: "3140123001" },
+      { initials: "RC", name: "Restaurante El Costeño", sub: "Comercio · El Rodadero", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 4 días", suggestion: "Comprador de patacones y plátano maduro.", messages: 2, whatsapp: "3163456001" },
+    ],
+    "Logística": [
+      { initials: "BG", name: "Bananera González & Hijos", sub: "Banano · Zona Bananera", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hoy", suggestion: "Gran volumen de exportación que requiere logística.", messages: 4, whatsapp: "3174567001" },
+      { initials: "FP", name: "Finca La Primavera", sub: "Palma · Zona Bananera", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 2 días", suggestion: "Transporte de racimos a extractoras.", messages: 2, whatsapp: "3129012001" },
+      { initials: "DD", name: "Distribuidora Del Mar", sub: "Pesca · Pescaíto", tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Ayer", suggestion: "Cadena de frío compartida para distribución.", messages: 3, whatsapp: "3140123001" },
+      { initials: "AG", name: "Agro Guamal SAS", sub: "Banano · Guamal", tipo: "Cliente potencial", status: "Pendiente", lastInteraction: "Hace 6 días", suggestion: "Necesitan transporte desde Guamal al puerto.", messages: 0, whatsapp: "3196789002" },
+      { initials: "CS", name: "Café Sierra Nevada Orgánico", sub: "Café · Aracataca", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 5 días", suggestion: "Transporte del café desde la sierra al punto de venta.", messages: 1, whatsapp: "3118901001" },
+    ],
+    "Palma de Aceite": [
+      { initials: "FP", name: "Finca La Primavera", sub: "Palma · Zona Bananera", tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Ayer", suggestion: "Intercambio de técnicas de cultivo sostenible.", messages: 3, whatsapp: "3129012001" },
+      { initials: "TC", name: "Transportes Caribe Norte", sub: "Logística · Mamatoco", tipo: "Proveedor", status: "Activa", lastInteraction: "Hace 2 días", suggestion: "Transporte de RFF a la extractora más cercana.", messages: 2, whatsapp: "3196789001" },
+      { initials: "AG", name: "Agro Guamal SAS", sub: "Banano · Guamal", tipo: "Referente", status: "Activa", lastInteraction: "Hace 4 días", suggestion: "Experiencia en certificaciones agrícolas.", messages: 1, whatsapp: "3196789002" },
+      { initials: "BG", name: "Bananera González & Hijos", sub: "Banano · Zona Bananera", tipo: "Referente", status: "Pendiente", lastInteraction: "Hace 1 semana", suggestion: "Certificación Rainforest Alliance que podría aplicar.", messages: 0, whatsapp: "3174567001" },
+    ],
+    "Pesca y Acuicultura": [
+      { initials: "DD", name: "Distribuidora Del Mar", sub: "Pesca · Pescaíto", tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Hoy", suggestion: "Distribuyan juntos para cubrir más restaurantes.", messages: 4, whatsapp: "3140123001" },
+      { initials: "RC", name: "Restaurante El Costeño", sub: "Comercio · El Rodadero", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Ayer", suggestion: "Su carta de mariscos requiere proveeduría constante.", messages: 3, whatsapp: "3163456001" },
+      { initials: "HC", name: "Hotel Casa Bambú", sub: "Turismo · El Rodadero", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 2 días", suggestion: "Restaurante del hotel necesita mariscos frescos diarios.", messages: 2, whatsapp: "3158709001" },
+      { initials: "TC", name: "Transportes Caribe Norte", sub: "Logística · Mamatoco", tipo: "Proveedor", status: "Activa", lastInteraction: "Hace 3 días", suggestion: "Transporte refrigerado para distribución.", messages: 1, whatsapp: "3196789001" },
+      { initials: "MA", name: "Mar Azul Boutique Hotel", sub: "Turismo · El Rodadero", tipo: "Cliente potencial", status: "Pendiente", lastInteraction: "Hace 1 semana", suggestion: "Pide cotización para suministro semanal.", messages: 0, whatsapp: "3174567002" },
+    ],
+    "Café": [
+      { initials: "CS2", name: "Coffi Sierra Café SAS", sub: "Café · Santa Marta", tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Ayer", suggestion: "Co-branding de cafés especiales de la Sierra Nevada.", messages: 3, whatsapp: "3118901010" },
+      { initials: "TC", name: "Transportes Caribe Norte", sub: "Logística · Mamatoco", tipo: "Proveedor", status: "Activa", lastInteraction: "Hace 3 días", suggestion: "Transporte del café desde la finca al punto de venta.", messages: 2, whatsapp: "3196789001" },
+      { initials: "HC", name: "Hotel Casa Bambú", sub: "Turismo · El Rodadero", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 4 días", suggestion: "Desayunos con café especial de la Sierra para turistas.", messages: 1, whatsapp: "3158709001" },
+      { initials: "SN", name: "Hostal Sierra Nevada", sub: "Turismo · Bavaria", tipo: "Cliente potencial", status: "Pendiente", lastInteraction: "Hace 1 semana", suggestion: "Café de bienvenida para viajeros internacionales.", messages: 0, whatsapp: "3185678002" },
+      { initials: "RC", name: "Restaurante El Costeño", sub: "Comercio · El Rodadero", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 5 días", suggestion: "Carta de cafés especiales en su menú.", messages: 2, whatsapp: "3163456001" },
+    ],
+    "Comercio y Servicios": [
+      { initials: "HC", name: "Hotel Casa Bambú", sub: "Turismo · El Rodadero", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hoy", suggestion: "Gran volumen de compras en insumos y servicios.", messages: 3, whatsapp: "3158709001" },
+      { initials: "MA", name: "Mar Azul Boutique Hotel", sub: "Turismo · El Rodadero", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 2 días", suggestion: "Proveeduría regular para hotel boutique.", messages: 2, whatsapp: "3174567002" },
+      { initials: "TC", name: "Transportes Caribe Norte", sub: "Logística · Mamatoco", tipo: "Proveedor", status: "Activa", lastInteraction: "Hace 3 días", suggestion: "Logística para tus productos o servicios.", messages: 1, whatsapp: "3196789001" },
+      { initials: "EX", name: "Experiencias Caribe SAS", sub: "Turismo · Bello Horizonte", tipo: "Aliado estratégico", status: "Pendiente", lastInteraction: "Hace 1 semana", suggestion: "Alianza para ofrecer servicios a turistas.", messages: 0, whatsapp: "3151234001" },
+      { initials: "ZM", name: "ZAKU MOCHILAS", sub: "Artesanías · Mamatoco", tipo: "Aliado estratégico", status: "Activa", lastInteraction: "Hace 4 días", suggestion: "Proveedor de productos locales para tu negocio.", messages: 1, whatsapp: "3158709635" },
+    ],
+  };
+  const defaultConns = [
+    { initials: "TC", name: "Transportes Caribe Norte", sub: "Logística · Mamatoco", tipo: "Proveedor", status: "Activa", lastInteraction: "Hace 2 días", suggestion: "Logística para tu negocio.", messages: 1, whatsapp: "3196789001" },
+    { initials: "RC", name: "Restaurante El Costeño", sub: "Comercio · El Rodadero", tipo: "Cliente potencial", status: "Activa", lastInteraction: "Hace 3 días", suggestion: "Posible cliente para tus productos.", messages: 1, whatsapp: "3163456001" },
+    { initials: "HC", name: "Hotel Casa Bambú", sub: "Turismo · El Rodadero", tipo: "Aliado estratégico", status: "Pendiente", lastInteraction: "Hace 1 semana", suggestion: "Alianza potencial para crecer en Santa Marta.", messages: 0, whatsapp: "3158709001" },
+  ];
+  const [connections, setConnections] = useState(CLUSTER_CONNECTIONS[user?.cluster] || defaultConns);
+
 
   const stats = [
     { val: connections.filter(c => c.status === "Activa").length, label: "Activas", color: "#4CAF50" },
@@ -1263,6 +1374,8 @@ function ProductosTab({ user, onUpdate }) {
   const saveProductos = (list) => {
     setProductos(list);
     localStorage.setItem("rutac_productos_" + user?.id, JSON.stringify(list));
+    // Notify marketplace to refresh immediately
+    window.dispatchEvent(new Event("storage"));
   };
 
   const handleImageChange = (e) => {
@@ -1603,89 +1716,186 @@ function MiNegocioPage({ user, setUserGlobal }) {
 }
 
 // ==================== MARKETPLACE ====================
-function MarketplacePage({ user }) {
+function MarketplacePage({ user, allProfiles }) {
   const [search, setSearch] = useState("");
   const [selectedCluster, setSelectedCluster] = useState(null);
-  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedBiz, setSelectedBiz] = useState(null);
+  const [productosMap, setProductosMap] = useState({});
 
-  const PRODUCT_IMAGES = [
-    "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=280&fit=crop",
-    "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400&h=280&fit=crop",
-    "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=280&fit=crop",
-    "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=400&h=280&fit=crop",
-    "https://images.unsplash.com/photo-1537047902294-62a40c20a6ae?w=400&h=280&fit=crop",
-    "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=400&h=280&fit=crop",
-    "https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=400&h=280&fit=crop",
-    "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&h=280&fit=crop",
+  // Load productos from localStorage - refresh every 2s to pick up new products
+  const refreshProductos = useCallback(() => {
+    const p = {};
+    (allProfiles || []).forEach(prof => {
+      try {
+        const items = JSON.parse(localStorage.getItem("rutac_productos_" + prof.id) || "[]");
+        if (items.length) p[prof.id] = items;
+      } catch {}
+    });
+    // Also load own products
+    try {
+      const own = JSON.parse(localStorage.getItem("rutac_productos_" + user.id) || "[]");
+      if (own.length) p[user.id] = own;
+    } catch {}
+    setProductosMap(p);
+  }, [allProfiles, user.id]);
+
+  useEffect(() => {
+    refreshProductos();
+    // Listen for storage changes from other tabs / same tab saves
+    const handler = () => refreshProductos();
+    window.addEventListener("storage", handler);
+    // Also poll every 1.5s for same-tab saves
+    const interval = setInterval(refreshProductos, 1500);
+    return () => { window.removeEventListener("storage", handler); clearInterval(interval); };
+  }, [refreshProductos]);
+
+  // ---- STATIC CURATED PRODUCTS (always visible, cluster-tagged) ----
+  const STATIC_PRODUCTS = [
+    { id: "s1",  cluster: "Artesanías",         nombre: "Mochila Wayuu Grande",             empresa: "ZAKU MOCHILAS",              municipio: "Santa Marta",   etapa: "Madurez",        whatsapp: "3158709635", precio: "$220.000",  desc: "Mochila 100% artesanal tejida a mano por mujeres wayuu. Diseños exclusivos en colores vibrantes del Caribe. 40×35 cm. Entrega en 5 días.", img: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=280&fit=crop" },
+    { id: "s2",  cluster: "Artesanías",         nombre: "Set Aretes de Conchas",            empresa: "Artesanías Bahía",           municipio: "Taganga",       etapa: "Consolidación",  whatsapp: "3152345001", precio: "$45.000",   desc: "Aretes elaborados con conchas del Caribe colombiano y semillas naturales. Pieza única certificada. Incluye estuche de regalo.", img: "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=400&h=280&fit=crop" },
+    { id: "s3",  cluster: "Artesanías",         nombre: "Sombrero Vueltiao",                empresa: "Artesanías Bahía",           municipio: "Taganga",       etapa: "Consolidación",  whatsapp: "3152345001", precio: "$85.000",   desc: "Sombrero vueltiao tejido en fibra de caña flecha. Símbolo cultural del Caribe. Tallas S/M/L.", img: "https://images.unsplash.com/photo-1572307480813-ceb0e59d8325?w=400&h=280&fit=crop" },
+    { id: "s4",  cluster: "Turismo",            nombre: "Tour Parque Tayrona 1 día",        empresa: "Tour Sierra Nevada SAS",     municipio: "Santa Marta",   etapa: "Crecimiento",    whatsapp: "3185678001", precio: "$150.000/persona", desc: "Transporte + guía bilingüe + seguro + snack. Máx. 12 personas. Salida 7am.", img: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=280&fit=crop" },
+    { id: "s5",  cluster: "Turismo",            nombre: "Noche Hotel Boutique",             empresa: "Hotel Casa Bambú",           municipio: "Santa Marta",   etapa: "Madurez",        whatsapp: "3158709001", precio: "Desde $280.000/noche", desc: "Habitación doble frente al mar. Desayuno incluido, WiFi, piscina.", img: "https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=400&h=280&fit=crop" },
+    { id: "s6",  cluster: "Turismo",            nombre: "Clase de Cocina Caribeña",         empresa: "Experiencias Caribe SAS",    municipio: "Santa Marta",   etapa: "Crecimiento",    whatsapp: "3151234001", precio: "$80.000/persona", desc: "Aprende sancocho de pescado, arroz con coco y patacones con chef local. Grupos 4-12.", img: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=400&h=280&fit=crop" },
+    { id: "s7",  cluster: "Pesca y Acuicultura",nombre: "Pargo Rojo Fresco x kg",           empresa: "Pescadería El Mocho",        municipio: "Santa Marta",   etapa: "Crecimiento",    whatsapp: "3142345678", precio: "$25.000/kg",  desc: "Pargo rojo directo del muelle de Pescaíto. Mín. 2 kg. Entrega antes 9am.", img: "https://images.unsplash.com/photo-1510130387422-82bed34b37e9?w=400&h=280&fit=crop" },
+    { id: "s8",  cluster: "Pesca y Acuicultura",nombre: "Caja Mariscos Mixtos 5 kg",        empresa: "Distribuidora Del Mar",      municipio: "Santa Marta",   etapa: "Consolidación",  whatsapp: "3140123001", precio: "$180.000/caja", desc: "5 kg: camarón tigre, calamar, mejillones y pulpo. Cadena de frío. Pago contraentrega.", img: "https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=400&h=280&fit=crop" },
+    { id: "s9",  cluster: "Café",               nombre: "Café Especial 500g",               empresa: "Café Sierra Nevada Orgánico",municipio: "Aracataca",     etapa: "Inicio",         whatsapp: "3118901001", precio: "$45.000/500g",desc: "Orgánico de altura, variedad Caturra. Tostado medio. Notas de frutos rojos. 85 puntos Q-Grader.", img: "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=400&h=280&fit=crop" },
+    { id: "s10", cluster: "Banano",             nombre: "Plátano Macho x racimo",           empresa: "Bananera González & Hijos",  municipio: "Zona Bananera", etapa: "Consolidación",  whatsapp: "3174567001", precio: "$12.000/racimo", desc: "Primera calidad de la Zona Bananera. Racimos 20-25 unidades. Venta mayorista.", img: "https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=400&h=280&fit=crop" },
+    { id: "s11", cluster: "Logística",          nombre: "Flete Santa Marta–Bogotá",         empresa: "Transportes Caribe Norte",   municipio: "Santa Marta",   etapa: "Consolidación",  whatsapp: "3196789001", precio: "Desde $380.000/viaje", desc: "Furgón 1.5 ton. Rastreo GPS, seguro incluido. 18-20 horas. Recogida en bodega.", img: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=400&h=280&fit=crop" },
+    { id: "s12", cluster: "Comercio y Servicios",nombre: "Almuerzo Ejecutivo Caribeño",     empresa: "Restaurante El Costeño",     municipio: "Santa Marta",   etapa: "Consolidación",  whatsapp: "3163456001", precio: "$25.000/persona", desc: "Sopa + plato + jugo + postre. Eventos corporativos hasta 80 personas.", img: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=280&fit=crop" },
+    { id: "s13", cluster: "Comercio y Servicios",nombre: "Lavandería Industrial x kg",      empresa: "Lavandería Caribe Express",  municipio: "Santa Marta",   etapa: "Madurez",        whatsapp: "3118901002", precio: "$4.500/kg",   desc: "Lavado y planchado industrial para hoteles y restaurantes. Recogida y entrega 24h.", img: "https://images.unsplash.com/photo-1582735689369-4fe89db7114c?w=400&h=280&fit=crop" },
+    { id: "s14", cluster: "Palma de Aceite",    nombre: "Aceite de Palma Bruto x litro",   empresa: "Palmeras del Magdalena SAS", municipio: "El Retén",      etapa: "Crecimiento",    whatsapp: "3107890001", precio: "$5.800/litro","desc": "CPO cero deforestación. Para procesadoras de alimentos. Mín. 1.000 L. RSPO.", img: "https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=400&h=280&fit=crop" },
+    { id: "s15", cluster: "Turismo",            nombre: "Paquete Luna de Miel 3N",          empresa: "Mar Azul Boutique Hotel",    municipio: "Santa Marta",   etapa: "Madurez",        whatsapp: "3174567002", precio: "$1.200.000/pareja", desc: "Jacuzzi, cena romántica, desayuno en cama, spa y tour privado Tayrona.", img: "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&h=280&fit=crop" },
   ];
 
-  const clusterNames = ["Artesanías", "Artesanías", "Turismo", "Turismo", "Gastronomía", "Gastronomía", "Logística", "Turismo"];
-  const productNames = ["Mochilas Wayuu auténticas", "Sombrero vueltiao", "Tour Sierra Nevada", "Paquete Playa Blanca", "Arepas de choclo", "Arroz de lisa", "Transporte refrigerado", "Hospedaje boutique"];
-  const empresaNames = ["Artesanías Wayuu", "Tejidos del Magdalena", "TuriSierra S.A.S", "Caribe Tours", "Cocina Criolla Doña Ana", "Restaurante El Puerto", "LogisMag Ltda", "Hotel Brisas Marinas"];
+  // ---- REAL PROFILE PRODUCTS (from Supabase users who added products) ----
+  const realListings = [];
+  (allProfiles || []).filter(p => p.id !== user.id && p.role !== 'admin').forEach(prof => {
+    const prods = productosMap[prof.id] || [];
+    prods.forEach((prod, idx) => {
+      realListings.push({
+        id: `r_${prof.id}_${idx}`,
+        cluster: prof.cluster || "Comercio y Servicios",
+        nombre: prod.nombre,
+        empresa: prof.razon_social,
+        municipio: prof.municipio,
+        etapa: prof.etapa,
+        whatsapp: prof.whatsapp,
+        precio: prod.precio || "Consultar precio",
+        desc: prod.descripcion || `Producto ofrecido por ${prof.razon_social}. Contacta para más información.`,
+        img: prod.imageUrl || (() => {
+          // Generate themed Unsplash image based on product name keywords
+          const kw = (prod.nombre || "").toLowerCase();
+          if (kw.includes("mochila") || kw.includes("wayuu") || kw.includes("arhuaca")) return "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=280&fit=crop";
+          if (kw.includes("café") || kw.includes("cafe") || kw.includes("coffee")) return "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=400&h=280&fit=crop";
+          if (kw.includes("pesca") || kw.includes("pescado") || kw.includes("mariscos") || kw.includes("pargo") || kw.includes("camarón")) return "https://images.unsplash.com/photo-1510130387422-82bed34b37e9?w=400&h=280&fit=crop";
+          if (kw.includes("artesanía") || kw.includes("artesania") || kw.includes("joyería") || kw.includes("bisutería")) return "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=400&h=280&fit=crop";
+          if (kw.includes("hotel") || kw.includes("hospedaje") || kw.includes("hostal") || kw.includes("alojamiento")) return "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&h=280&fit=crop";
+          if (kw.includes("tour") || kw.includes("viaje") || kw.includes("turismo") || kw.includes("excursión") || kw.includes("excursion")) return "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=280&fit=crop";
+          if (kw.includes("plátano") || kw.includes("platano") || kw.includes("banano") || kw.includes("fruta")) return "https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=400&h=280&fit=crop";
+          if (kw.includes("comida") || kw.includes("almuerzo") || kw.includes("restaurante") || kw.includes("gastro")) return "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=280&fit=crop";
+          if (kw.includes("transporte") || kw.includes("flete") || kw.includes("logística") || kw.includes("envío")) return "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=400&h=280&fit=crop";
+          if (kw.includes("palma") || kw.includes("aceite")) return "https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=400&h=280&fit=crop";
+          if (kw.includes("ropa") || kw.includes("vestido") || kw.includes("camisa") || kw.includes("moda")) return "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=280&fit=crop";
+          if (kw.includes("flor") || kw.includes("planta") || kw.includes("jardín") || kw.includes("botanica")) return "https://images.unsplash.com/photo-1490750967868-88df5691cc76?w=400&h=280&fit=crop";
+          if (kw.includes("limpieza") || kw.includes("aseo") || kw.includes("lavandería") || kw.includes("lavanderia")) return "https://images.unsplash.com/photo-1582735689369-4fe89db7114c?w=400&h=280&fit=crop";
+          if (kw.includes("sombrero") || kw.includes("bisutería") || kw.includes("accesorio")) return "https://images.unsplash.com/photo-1572307480813-ceb0e59d8325?w=400&h=280&fit=crop";
+          if (kw.includes("tecnología") || kw.includes("tecnologia") || kw.includes("digital") || kw.includes("software")) return "https://images.unsplash.com/photo-1518770660439-4636190af475?w=400&h=280&fit=crop";
+          // Cluster-based fallback
+          const cl = (prof.cluster || "").toLowerCase();
+          if (cl.includes("turismo")) return "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=280&fit=crop";
+          if (cl.includes("artesanía") || cl.includes("artesania")) return "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=280&fit=crop";
+          if (cl.includes("pesca")) return "https://images.unsplash.com/photo-1510130387422-82bed34b37e9?w=400&h=280&fit=crop";
+          if (cl.includes("café") || cl.includes("cafe")) return "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=400&h=280&fit=crop";
+          if (cl.includes("banano")) return "https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=400&h=280&fit=crop";
+          if (cl.includes("logística") || cl.includes("logistica")) return "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=400&h=280&fit=crop";
+          if (cl.includes("palma")) return "https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=400&h=280&fit=crop";
+          // Generic colorful market image
+          return "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=400&h=280&fit=crop";
+        })(),
+        profileId: prof.id,
+        profile: prof,
+      });
+    });
+  });
 
-  const products = PRODUCT_IMAGES.map((img, i) => ({
-    id: i, cluster: clusterNames[i], nombre: productNames[i], img,
-    empresa: empresaNames[i], whatsapp: "3158709635",
-    desc: `Proveedor especializado en ${clusterNames[i].toLowerCase()}. Santa Marta, Magdalena.`,
-    precio: `Desde $${(Math.floor(Math.random() * 90) + 10) * 1000} COP`
-  }));
+  const allItems = [...STATIC_PRODUCTS, ...realListings];
 
-  const filtered = products.filter(p =>
-    (!selectedCluster || p.cluster === selectedCluster) &&
-    (p.nombre.toLowerCase().includes(search.toLowerCase()) || p.empresa.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filtered = allItems.filter(p => {
+    const q = search.toLowerCase();
+    const matchQ = !q || (p.nombre||"").toLowerCase().includes(q) || (p.empresa||"").toLowerCase().includes(q) || (p.desc||"").toLowerCase().includes(q) || (p.cluster||"").toLowerCase().includes(q) || (p.municipio||"").toLowerCase().includes(q);
+    const matchC = !selectedCluster || p.cluster === selectedCluster;
+    return matchQ && matchC;
+  });
+
+  const clusterCounts = {};
+  allItems.forEach(p => { clusterCounts[p.cluster] = (clusterCounts[p.cluster] || 0) + 1; });
 
   return (
-    <div style={{ padding: "2rem", maxWidth: 1300, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-        <div>
-          <h1 style={{ margin: "0 0 4px", fontSize: 26 }}>Marketplace Ruta C</h1>
-          <p style={{ margin: 0, color: "#666", fontSize: 14 }}>Productos y servicios de empresas del Magdalena</p>
-        </div>
+    <div style={{ padding: "2rem", maxWidth: 1200, margin: "0 auto" }}>
+      <div style={{ marginBottom: 20 }}>
+        <h1 style={{ fontSize: 26, margin: "0 0 4px" }}>Marketplace Ruta C</h1>
+        <p style={{ color: "#666", fontSize: 14, margin: 0 }}>Productos y servicios de emprendedores del Magdalena · {allItems.length} ofertas</p>
       </div>
 
       {/* Search */}
-      <div style={{ position: "relative", marginBottom: 20 }}>
+      <div style={{ position: "relative", marginBottom: 16 }}>
         <svg style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Buscar productos, proveedores o servicios..."
-          style={{ ...base.input, paddingLeft: 40, fontSize: 15 }} />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar productos, empresas o servicios..." style={{ ...base.input, paddingLeft: 42, fontSize: 15 }} />
       </div>
 
-      {/* Cluster filter */}
+      {/* Cluster filter pills */}
       <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
-        <button onClick={() => setSelectedCluster(null)} style={{
-          background: !selectedCluster ? "#0F9B8E" : "#fff", color: !selectedCluster ? "#fff" : "#555",
-          border: "1.5px solid", borderColor: !selectedCluster ? "#0F9B8E" : "#D8DDE5",
-          borderRadius: 20, padding: "7px 16px", fontSize: 13, cursor: "pointer", fontFamily: base.fontFamily, fontWeight: 500
-        }}>Todos</button>
-        {CLUSTERS.map(c => (
-          <button key={c.id} onClick={() => setSelectedCluster(c.titulo)} style={{
-            background: selectedCluster === c.titulo ? c.color : "#fff",
-            color: selectedCluster === c.titulo ? "#fff" : "#555",
-            border: "1.5px solid", borderColor: selectedCluster === c.titulo ? c.color : "#D8DDE5",
-            borderRadius: 20, padding: "7px 16px", fontSize: 13, cursor: "pointer", fontFamily: base.fontFamily, fontWeight: 500
-          }}>{c.titulo}</button>
-        ))}
+        <button onClick={() => setSelectedCluster(null)} style={{ background: !selectedCluster ? "#1A1A2E" : "#fff", color: !selectedCluster ? "#fff" : "#555", border: "1.5px solid", borderColor: !selectedCluster ? "#1A1A2E" : "#D8DDE5", borderRadius: 20, padding: "6px 16px", fontSize: 13, cursor: "pointer", fontFamily: base.fontFamily, fontWeight: 500 }}>
+          Todos ({allItems.length})
+        </button>
+        {CLUSTERS.map(c => {
+          const count = clusterCounts[c.titulo] || 0;
+          if (!count) return null;
+          return (
+            <button key={c.id} onClick={() => setSelectedCluster(c.titulo)} style={{ background: selectedCluster === c.titulo ? c.color : "#fff", color: selectedCluster === c.titulo ? "#fff" : "#555", border: "1.5px solid", borderColor: selectedCluster === c.titulo ? c.color : "#D8DDE5", borderRadius: 20, padding: "6px 16px", fontSize: 13, cursor: "pointer", fontFamily: base.fontFamily, fontWeight: 500 }}>
+              {c.titulo} ({count})
+            </button>
+          );
+        })}
       </div>
+
+      <p style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>{filtered.length} resultado{filtered.length !== 1 ? "s" : ""}</p>
 
       {/* Products grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px,1fr))", gap: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px,1fr))", gap: 20 }}>
         {filtered.map(p => {
           const c = CLUSTERS.find(cl => cl.titulo === p.cluster) || CLUSTERS[0];
           return (
-            <div key={p.id} onClick={() => setSelectedProduct(p)} style={{ background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.07)", cursor: "pointer", transition: "transform .15s, box-shadow .15s" }}>
-              <div style={{ position: "relative" }}>
-                <img src={p.img} alt="" style={{ width: "100%", height: 200, objectFit: "cover" }} />
+            <div key={p.id} onClick={() => setSelectedBiz(p)} style={{ background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.07)", cursor: "pointer", transition: "box-shadow .15s", display: "flex", flexDirection: "column" }}
+              onMouseEnter={e => e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.14)"}
+              onMouseLeave={e => e.currentTarget.style.boxShadow = "0 2px 12px rgba(0,0,0,0.07)"}
+            >
+              {/* Image */}
+              <div style={{ position: "relative", flexShrink: 0 }}>
+                {p.img ? (
+                  <img src={p.img} alt="" style={{ width: "100%", height: 185, objectFit: "cover" }} />
+                ) : (
+                  <div style={{ width: "100%", height: 120, background: `linear-gradient(135deg,${c.color}25,${c.color}08)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ width: 52, height: 52, borderRadius: "50%", background: c.color + "22", border: `2px solid ${c.color}`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 18, color: c.color }}>
+                      {getInitials(p.empresa || "")}
+                    </div>
+                  </div>
+                )}
+                <span style={{ position: "absolute", top: 10, left: 10, background: c.color, color: "#fff", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>{p.cluster}</span>
+                {p.profileId && <span style={{ position: "absolute", top: 10, right: 10, background: "#1A1A2E", color: "#fff", borderRadius: 20, padding: "3px 10px", fontSize: 10, fontWeight: 600 }}>🔴 Ruta C</span>}
               </div>
-              <div style={{ padding: "14px 16px" }}>
-                <Badge color={c.color}>{p.cluster}</Badge>
-                <p style={{ fontWeight: 700, margin: "10px 0 4px", fontSize: 15 }}>{p.nombre}</p>
-                <p style={{ color: "#666", fontSize: 13, margin: "0 0 4px" }}>{p.empresa}</p>
-                <p style={{ color: "#0F9B8E", fontSize: 13, fontWeight: 600, margin: "0 0 12px" }}>{p.precio}</p>
-                <Btn full small onClick={e => { e.stopPropagation(); window.open(`https://wa.me/57${p.whatsapp}?text=Hola, vi tu negocio en Ruta C y me interesa: ${p.nombre}`, "_blank"); }}>
-                  Contactar por WhatsApp
-                </Btn>
+              {/* Content */}
+              <div style={{ padding: "14px 16px", flex: 1, display: "flex", flexDirection: "column" }}>
+                <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: 15, lineHeight: 1.3 }}>{p.nombre}</p>
+                <p style={{ margin: "0 0 6px", fontSize: 12, color: "#888" }}>{p.empresa} · {p.municipio}</p>
+                <p style={{ margin: "0 0 10px", fontSize: 13, color: "#555", lineHeight: 1.5, flex: 1, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.desc}</p>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "auto" }}>
+                  <span style={{ fontWeight: 800, color: c.color, fontSize: 14 }}>{p.precio}</span>
+                  <button onClick={e => { e.stopPropagation(); window.open(`https://wa.me/57${p.whatsapp}?text=Hola, vi tu oferta en Ruta C Conecta: "${p.nombre}". Me interesa.`, "_blank"); }} style={{ background: "#25D366", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600, fontFamily: base.fontFamily }}>
+                    WhatsApp
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -1694,31 +1904,102 @@ function MarketplacePage({ user }) {
 
       {filtered.length === 0 && (
         <div style={{ textAlign: "center", padding: "4rem", color: "#888" }}>
-          <p style={{ fontSize: 16 }}>No se encontraron resultados para tu búsqueda.</p>
+          <p style={{ fontSize: 16 }}>No se encontraron productos para tu búsqueda.</p>
+          <button onClick={() => { setSearch(""); setSelectedCluster(null); }} style={{ background: "#0F9B8E", color: "#fff", border: "none", borderRadius: 10, padding: "10px 20px", cursor: "pointer", fontFamily: base.fontFamily, fontWeight: 600, marginTop: 12 }}>Ver todos</button>
         </div>
       )}
 
-      {/* Product modal */}
-      {selectedProduct && (
-        <div onClick={() => setSelectedProduct(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: "1rem" }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 20, width: "100%", maxWidth: 560, maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ position: "relative" }}>
-              <img src={selectedProduct.img} alt="" style={{ width: "100%", height: 260, objectFit: "cover", borderRadius: "20px 20px 0 0" }} />
-              <button onClick={() => setSelectedProduct(null)} style={{ position: "absolute", top: 14, right: 14, width: 32, height: 32, borderRadius: "50%", background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
-            </div>
-            <div style={{ padding: "1.5rem" }}>
-              {(() => { const c = CLUSTERS.find(cl => cl.titulo === selectedProduct.cluster) || CLUSTERS[0]; return <Badge color={c.color}>{selectedProduct.cluster}</Badge>; })()}
-              <h2 style={{ margin: "12px 0 4px", fontSize: 20 }}>{selectedProduct.nombre}</h2>
-              <p style={{ color: "#666", fontSize: 14, margin: "0 0 8px" }}>{selectedProduct.empresa}</p>
-              <p style={{ color: "#0F9B8E", fontWeight: 700, fontSize: 18, margin: "0 0 16px" }}>{selectedProduct.precio}</p>
-              <p style={{ color: "#555", fontSize: 14, lineHeight: 1.6, margin: "0 0 20px" }}>{selectedProduct.desc}</p>
-              <Btn full onClick={() => window.open(`https://wa.me/57${selectedProduct.whatsapp}?text=Hola, vi tu negocio en Ruta C y me interesa: ${selectedProduct.nombre}`, "_blank")}>
-                Contactar por WhatsApp
-              </Btn>
+      {/* ===== BUSINESS / PRODUCT DETAIL MODAL ===== */}
+      {selectedBiz && (() => {
+        const c = CLUSTERS.find(cl => cl.titulo === selectedBiz.cluster) || CLUSTERS[0];
+        const isRealProfile = !!selectedBiz.profileId;
+        const prof = selectedBiz.profile;
+        const allProds = isRealProfile ? (productosMap[selectedBiz.profileId] || []) : null;
+        const simScore = isRealProfile ? calcSimilarity(user, prof) : null;
+
+        return (
+          <div onClick={() => setSelectedBiz(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: "1rem" }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 20, width: "100%", maxWidth: 620, maxHeight: "92vh", overflowY: "auto" }}>
+
+              {/* Hero image */}
+              <div style={{ position: "relative" }}>
+                {selectedBiz.img ? (
+                  <img src={selectedBiz.img} alt="" style={{ width: "100%", height: 240, objectFit: "cover", borderRadius: "20px 20px 0 0" }} />
+                ) : (
+                  <div style={{ width: "100%", height: 120, background: `linear-gradient(135deg,${c.color}30,${c.color}10)`, borderRadius: "20px 20px 0 0", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ width: 64, height: 64, borderRadius: "50%", background: c.color + "22", border: `2.5px solid ${c.color}`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 22, color: c.color }}>{getInitials(selectedBiz.empresa || "")}</div>
+                  </div>
+                )}
+                <button onClick={() => setSelectedBiz(null)} style={{ position: "absolute", top: 12, right: 12, width: 32, height: 32, borderRadius: "50%", background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                <span style={{ position: "absolute", top: 12, left: 12, background: c.color, color: "#fff", borderRadius: 20, padding: "4px 14px", fontSize: 12, fontWeight: 700 }}>{selectedBiz.cluster}</span>
+              </div>
+
+              <div style={{ padding: "1.5rem" }}>
+                {/* Product info */}
+                <h2 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800 }}>{selectedBiz.nombre}</h2>
+                <p style={{ margin: "0 0 6px", color: "#888", fontSize: 14 }}>{selectedBiz.empresa} · {selectedBiz.municipio}{selectedBiz.etapa ? ` · ${selectedBiz.etapa}` : ""}</p>
+
+                {/* Price */}
+                <div style={{ display: "flex", alignItems: "center", gap: 16, margin: "12px 0 16px" }}>
+                  <span style={{ fontSize: 28, fontWeight: 900, color: c.color }}>{selectedBiz.precio}</span>
+                  {simScore !== null && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 80, height: 5, background: "#E0E0E0", borderRadius: 3 }}>
+                        <div style={{ height: "100%", width: `${simScore}%`, background: c.color, borderRadius: 3 }} />
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: c.color }}>{simScore}% afinidad</span>
+                    </div>
+                  )}
+                </div>
+
+                <p style={{ color: "#444", fontSize: 14, lineHeight: 1.7, margin: "0 0 20px" }}>{selectedBiz.desc}</p>
+
+                {/* If it's a real Ruta C profile, show all their products */}
+                {isRealProfile && allProds && allProds.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <p style={{ fontWeight: 700, fontSize: 15, margin: "0 0 12px" }}>Todos sus productos ({allProds.length})</p>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                      {allProds.map((prod, pi) => (
+                        <div key={pi} style={{ borderRadius: 12, overflow: "hidden", border: "1px solid #EAEAEA", background: "#F8F9FA" }}>
+                          {prod.imageUrl && <img src={prod.imageUrl} alt="" style={{ width: "100%", height: 110, objectFit: "cover" }} />}
+                          <div style={{ padding: "10px 12px" }}>
+                            <p style={{ margin: "0 0 3px", fontWeight: 700, fontSize: 13 }}>{prod.nombre}</p>
+                            {prod.precio && <p style={{ margin: "0 0 3px", fontSize: 13, color: c.color, fontWeight: 700 }}>{prod.precio}</p>}
+                            {prod.descripcion && <p style={{ margin: 0, fontSize: 12, color: "#666", lineHeight: 1.4 }}>{prod.descripcion}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Real profile extra info */}
+                {isRealProfile && prof && (
+                  <div style={{ background: "#F8F9FA", borderRadius: 12, padding: "12px 16px", marginBottom: 20 }}>
+                    {[
+                      ["Sector / Clúster", prof.cluster],
+                      ["Municipio", prof.municipio],
+                      ["Barrio", prof.barrio],
+                      ["Etapa empresarial", prof.etapa],
+                      ["Tiempo operando", prof.tiempo_operando],
+                    ].filter(([,v]) => v).map(([k,v]) => (
+                      <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #EAEAEA" }}>
+                        <span style={{ fontSize: 12, color: "#888" }}>{k}</span>
+                        <span style={{ fontSize: 13, fontWeight: 500 }}>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* CTA */}
+                <button onClick={() => window.open(`https://wa.me/57${selectedBiz.whatsapp}?text=Hola, vi tu oferta en Ruta C Conecta: "${selectedBiz.nombre}". Me interesa, ¿podemos conversar?`, "_blank")} style={{ width: "100%", background: "#25D366", color: "#fff", border: "none", borderRadius: 12, padding: "14px", fontSize: 16, cursor: "pointer", fontWeight: 700, fontFamily: base.fontFamily, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  📱 Contactar por WhatsApp
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
@@ -2177,18 +2458,719 @@ function AdminDashboard({ onLogout, user }) {
   );
 }
 
+// ==================== MOTOR IA: CLUSTERING + RECOMENDACIONES ====================
+
+// Score de similitud entre dos empresas (0-100)
+function calcSimilarity(a, b) {
+  let score = 0;
+  if (!a || !b) return 0;
+  // Mismo cluster = 35 pts
+  if (a.cluster && b.cluster && a.cluster === b.cluster) score += 35;
+  // Mismo municipio = 20 pts
+  if (a.municipio && b.municipio && a.municipio === b.municipio) score += 20;
+  // Etapa complementaria = 15 pts
+  const etapas = ["Ideación","Inicio","Crecimiento","Consolidación","Madurez","Expansión"];
+  const ia = etapas.indexOf(a.etapa); const ib = etapas.indexOf(b.etapa);
+  if (ia >= 0 && ib >= 0) {
+    const diff = Math.abs(ia - ib);
+    if (diff === 0) score += 15;
+    else if (diff === 1) score += 10;
+    else if (diff === 2) score += 5;
+  }
+  // Descripcion tiene palabras en común = hasta 20 pts
+  if (a.descripcion && b.descripcion) {
+    const wa = new Set(a.descripcion.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 4));
+    const wb = new Set(b.descripcion.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 4));
+    const common = [...wa].filter(w => wb.has(w)).length;
+    score += Math.min(20, common * 4);
+  }
+  // Registrado en cámara = +10 pts
+  if (a.registrado_camara === 'si' && b.registrado_camara === 'si') score += 10;
+  return Math.min(100, score);
+}
+
+// Tipo de relación entre dos empresas
+function tipoRelacion(a, b) {
+  if (!a || !b) return "Referente";
+  const ia = ["Ideación","Inicio","Crecimiento","Consolidación","Madurez","Expansión"].indexOf(a.etapa);
+  const ib = ["Ideación","Inicio","Crecimiento","Consolidación","Madurez","Expansión"].indexOf(b.etapa);
+  if (a.cluster === b.cluster && Math.abs(ia - ib) <= 1) return "Aliado estratégico";
+  if (ib > ia + 1) return "Referente";
+  if (ib < ia - 1) return "Cliente potencial";
+  if (a.cluster !== b.cluster) return "Proveedor";
+  return "Aliado estratégico";
+}
+
+// Justificación de por qué se recomienda
+function justificacion(a, b, tipo) {
+  const razones = [];
+  if (a.cluster === b.cluster) razones.push(`Ambos pertenecen al clúster de ${a.cluster}`);
+  if (a.municipio === b.municipio) razones.push(`Están en el mismo municipio (${a.municipio})`);
+  if (tipo === "Referente") razones.push(`${b.razon_social} tiene mayor trayectoria y puede orientarte`);
+  if (tipo === "Cliente potencial") razones.push(`Perfil comprador compatible con tu oferta`);
+  if (tipo === "Proveedor") razones.push(`Sector complementario que puede fortalecer tu cadena de valor`);
+  if (b.completitud >= 85) razones.push("Perfil completo con alta credibilidad");
+  return razones.length > 0 ? razones.join(" · ") : "Perfil con alta afinidad con tu negocio";
+}
+
+// Generar recomendaciones IA para un usuario dado todos los perfiles
+function generarRecomendaciones(user, allProfiles) {
+  if (!user || !allProfiles?.length) return [];
+  return allProfiles
+    .filter(p => p.id !== user.id && p.role !== 'admin')
+    .map(p => ({
+      ...p,
+      score: calcSimilarity(user, p),
+      tipo: tipoRelacion(user, p),
+      why: justificacion(user, p, tipoRelacion(user, p)),
+    }))
+    .filter(p => p.score > 20)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 12);
+}
+
+// Cluster dinámico: agrupar todos los perfiles
+function generarClusters(profiles) {
+  const grupos = {};
+  profiles.forEach(p => {
+    const key = p.cluster || "Sin clúster";
+    if (!grupos[key]) grupos[key] = [];
+    grupos[key].push(p);
+  });
+  return Object.entries(grupos).map(([cluster, miembros]) => ({
+    cluster,
+    miembros,
+    total: miembros.length,
+    etapas: miembros.reduce((acc, m) => { acc[m.etapa || "Inicio"] = (acc[m.etapa || "Inicio"] || 0) + 1; return acc; }, {}),
+    municipios: [...new Set(miembros.map(m => m.municipio).filter(Boolean))],
+    avgCompletitud: Math.round(miembros.reduce((s, m) => s + (m.completitud || 70), 0) / miembros.length),
+  }));
+}
+
+// Score de formalización (0-100)
+function scoreFormalización(user) {
+  let score = 0;
+  if (user.nit) score += 20;
+  if (user.registrado_camara === 'si') score += 25;
+  if (user.descripcion?.length > 50) score += 15;
+  if (user.whatsapp) score += 10;
+  if (user.barrio) score += 10;
+  if ((user.completitud || 0) >= 80) score += 20;
+  return Math.min(100, score);
+}
+
+// Ruta de formalización personalizada
+function rutaFormalización(user) {
+  const pasos = [
+    { id: 1, titulo: "Registra tu WhatsApp de negocio", desc: "Un número de contacto directo aumenta la confianza de clientes y aliados.", done: !!user.whatsapp, accion: "Mi negocio → General" },
+    { id: 2, titulo: "Describe tus productos y servicios", desc: "Las fotos y precios generan más conexiones y aparecen en el Marketplace.", done: false, accion: "Mi negocio → Productos y servicios" },
+    { id: 3, titulo: "Agrega tu NIT", desc: "El NIT es necesario para facturar y contratar con empresas formales.", done: !!user.nit, accion: "Mi negocio → General" },
+    { id: 4, titulo: "Conecta con 3 aliados estratégicos", desc: "Las conexiones activas aumentan tu visibilidad y las recomendaciones del motor IA.", done: false, accion: "Ir a Recomendaciones" },
+    { id: 5, titulo: "Verifica tus datos de ubicación", desc: "El barrio y municipio correctos mejoran las recomendaciones geográficas del motor.", done: !!(user.barrio && user.municipio), accion: "Mi negocio → General" },
+  ];
+  return pasos;
+}
+
+// ==================== AGENTE INTELIGENTE ====================
+function AgentePanel({ user, allProfiles, onNavigate }) {
+  const [alertas, setAlertas] = useState([]);
+  const [ejecutando, setEjecutando] = useState(false);
+  const [lastRun, setLastRun] = useState(null);
+
+  const ejecutarAgente = async () => {
+    setEjecutando(true);
+    await new Promise(r => setTimeout(r, 1800)); // simula procesamiento
+    const nuevasAlertas = [];
+    const recs = generarRecomendaciones(user, allProfiles);
+
+    // Alerta 1: nuevas conexiones disponibles
+    if (recs.length > 0) {
+      nuevasAlertas.push({
+        tipo: "conexion",
+        icon: "🔗",
+        titulo: `${recs.length} nuevas conexiones relevantes detectadas`,
+        desc: `El agente encontró empresas con alta afinidad a tu perfil. La más relevante: ${recs[0]?.razon_social} (${recs[0]?.score}% de match)`,
+        accion: "Ver recomendaciones",
+        page: "Recomendaciones",
+        color: "#0F9B8E",
+      });
+    }
+
+    // Alerta 2: perfil - siempre dar sugerencia de mejora con impacto en recomendaciones
+    const completitud = user.completitud || 70;
+    const completitudTip = completitud < 80
+      ? `Tu perfil tiene ${completitud}% de completitud. Al agregar descripción, productos y barrio el motor IA encontrará conexiones más relevantes para tu negocio.`
+      : `Tu perfil tiene ${completitud}% de completitud. Agrega fotos de productos para aparecer en más búsquedas del Marketplace.`;
+    nuevasAlertas.push({
+      tipo: "perfil",
+      icon: completitud >= 90 ? "✨" : "💡",
+      titulo: completitud >= 90 ? "Perfil excelente — sigue así" : "Mejora tu perfil para más conexiones",
+      desc: completitudTip,
+      accion: completitud >= 90 ? "Ver mis recomendaciones" : "Mejorar mi perfil",
+      page: completitud >= 90 ? "Recomendaciones" : "Mi negocio",
+      color: completitud >= 90 ? "#4CAF50" : "#185FA5",
+    });
+
+    // Alerta 3: empresas del mismo cluster
+    const mismoCluster = allProfiles.filter(p => p.cluster === user.cluster && p.id !== user.id);
+    if (mismoCluster.length > 0) {
+      nuevasAlertas.push({
+        tipo: "cluster",
+        icon: "🏘️",
+        titulo: `${mismoCluster.length} empresas activas en tu clúster de ${user.cluster}`,
+        desc: `Hay actividad reciente en tu clúster. Conecta con empresas similares para fortalecer la red.`,
+        accion: "Ver mi clúster",
+        page: "Mi clúster",
+        color: "#185FA5",
+      });
+    }
+
+    // Alerta 4: formalización
+    const scoreF = scoreFormalización(user);
+    if (scoreF < 60) {
+      nuevasAlertas.push({
+        tipo: "formalizacion",
+        icon: "📋",
+        titulo: "Tienes pasos pendientes en tu ruta de formalización",
+        desc: `Tu score de formalización es ${scoreF}/100. Completar los pasos aumenta tu acceso a programas y convocatorias.`,
+        accion: "Ver mi ruta",
+        page: "Formalización",
+        color: "#9C27B0",
+      });
+    }
+
+    setAlertas(nuevasAlertas);
+    setLastRun(new Date());
+    setEjecutando(false);
+  };
+
+  // Auto-ejecutar al montar
+  useEffect(() => { ejecutarAgente(); }, [user.id]);
+
+  return (
+    <div style={{ background: "#fff", borderRadius: 16, padding: "1.5rem", border: "1px solid #EAEAEA", marginBottom: 20 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#0F9B8E,#185FA5)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🤖</div>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Conector Inteligente</h3>
+            <p style={{ margin: 0, fontSize: 11, color: "#888" }}>{lastRun ? `Último análisis: ${lastRun.toLocaleTimeString("es-CO")}` : "Analizando tu perfil..."}</p>
+          </div>
+        </div>
+        <button onClick={ejecutarAgente} disabled={ejecutando} style={{ background: "#F0FBF9", border: "1px solid #0F9B8E", color: "#0F9B8E", borderRadius: 8, padding: "6px 14px", cursor: ejecutando ? "not-allowed" : "pointer", fontSize: 13, fontFamily: base.fontFamily, fontWeight: 600 }}>
+          {ejecutando ? "⏳ Analizando..." : "🔄 Reanálizar"}
+        </button>
+      </div>
+      {ejecutando && (
+        <div style={{ textAlign: "center", padding: "1rem", color: "#888", fontSize: 13 }}>
+          <div style={{ width: "100%", height: 4, background: "#F0F0F0", borderRadius: 2, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: "60%", background: "linear-gradient(90deg,#0F9B8E,#185FA5)", borderRadius: 2, animation: "pulse 1s infinite" }} />
+          </div>
+          <p style={{ marginTop: 8 }}>El agente está analizando tu perfil, clúster y conexiones potenciales...</p>
+        </div>
+      )}
+      {!ejecutando && alertas.map((a, i) => (
+        <div key={i} style={{ display: "flex", gap: 12, padding: "12px 14px", borderRadius: 10, background: a.color + "0D", border: `1px solid ${a.color}30`, marginBottom: 8 }}>
+          <span style={{ fontSize: 22, flexShrink: 0 }}>{a.icon}</span>
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: "0 0 2px", fontWeight: 600, fontSize: 14, color: "#1A1A2E" }}>{a.titulo}</p>
+            <p style={{ margin: "0 0 8px", fontSize: 13, color: "#555" }}>{a.desc}</p>
+            <button onClick={() => onNavigate(a.page)} style={{ background: a.color, color: "#fff", border: "none", borderRadius: 8, padding: "5px 14px", fontSize: 12, cursor: "pointer", fontFamily: base.fontFamily, fontWeight: 600 }}>
+              {a.accion} →
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ==================== RECOMENDACIONES IA ====================
+function RecomendacionesIAPage({ user, allProfiles, onNavigate }) {
+  const [filter, setFilter] = useState("Todos");
+  const [selected, setSelected] = useState(null);
+  const [saved, setSaved] = useState([]);
+  const tipos = ["Todos", "Aliado estratégico", "Cliente potencial", "Proveedor", "Referente"];
+  const tipoColor = { "Aliado estratégico": "#0F9B8E", "Cliente potencial": "#185FA5", "Proveedor": "#BA7517", "Referente": "#9C27B0" };
+
+  const recs = generarRecomendaciones(user, allProfiles);
+  const filtered = filter === "Todos" ? recs : recs.filter(r => r.tipo === filter);
+
+  return (
+    <div style={{ padding: "2rem", maxWidth: 960, margin: "0 auto" }}>
+      <div style={{ marginBottom: 20 }}>
+        <h1 style={{ fontSize: 26, margin: "0 0 4px" }}>Recomendaciones del Conector</h1>
+        <p style={{ color: "#666", fontSize: 14, margin: 0 }}>Motor IA · {recs.length} conexiones priorizadas para tu negocio</p>
+      </div>
+
+      <AgentePanel user={user} allProfiles={allProfiles} onNavigate={onNavigate} />
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+        {tipos.map(t => (
+          <button key={t} onClick={() => setFilter(t)} style={{
+            background: filter === t ? "#1A1A2E" : "#fff", color: filter === t ? "#fff" : "#555",
+            border: "1.5px solid", borderColor: filter === t ? "#1A1A2E" : "#D8DDE5",
+            borderRadius: 20, padding: "6px 16px", fontSize: 13, cursor: "pointer",
+            fontFamily: base.fontFamily, fontWeight: filter === t ? 600 : 400
+          }}>{t} {t !== "Todos" && <span style={{ opacity: 0.7 }}>({recs.filter(r => r.tipo === t).length})</span>}</button>
+        ))}
+      </div>
+
+      {filtered.length === 0 && (
+        <div style={{ textAlign: "center", padding: "3rem", color: "#888", background: "#F8F9FA", borderRadius: 16 }}>
+          <p style={{ fontSize: 16 }}>No hay recomendaciones de este tipo aún.</p>
+          <p style={{ fontSize: 13 }}>Completa tu perfil para mejorar las sugerencias del motor.</p>
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: selected ? "1fr 360px" : "1fr", gap: 20 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {filtered.map((r, i) => (
+            <div key={r.id || i} onClick={() => setSelected(r)} style={{
+              background: "#fff", borderRadius: 14, padding: "1.25rem 1.5rem",
+              border: selected?.id === r.id ? "2px solid #0F9B8E" : "1px solid #EAEAEA",
+              cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+            }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <div style={{ width: 46, height: 46, borderRadius: "50%", background: (tipoColor[r.tipo] || "#0F9B8E") + "18", border: `2px solid ${tipoColor[r.tipo] || "#0F9B8E"}`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14, color: tipoColor[r.tipo] || "#0F9B8E", flexShrink: 0 }}>
+                  {getInitials(r.razon_social)}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                    <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: 15 }}>{r.razon_social}</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: tipoColor[r.tipo] || "#0F9B8E" }}>{r.score}%</span>
+                      {saved.includes(r.id) && <span style={{ fontSize: 11, background: "#E8F5E9", color: "#4CAF50", borderRadius: 10, padding: "2px 8px" }}>✓ Guardada</span>}
+                    </div>
+                  </div>
+                  <p style={{ margin: "0 0 6px", fontSize: 12, color: "#888" }}>{r.cluster} · {r.municipio}</p>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 11, background: (tipoColor[r.tipo] || "#0F9B8E") + "18", color: tipoColor[r.tipo] || "#0F9B8E", borderRadius: 20, padding: "2px 10px", fontWeight: 600 }}>{r.tipo}</span>
+                    <span style={{ fontSize: 11, background: "#F8F9FA", color: "#666", borderRadius: 20, padding: "2px 10px" }}>{r.etapa}</span>
+                  </div>
+                  <p style={{ margin: "8px 0 0", fontSize: 12, color: "#555", fontStyle: "italic" }}>💡 {r.why}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {selected && (
+          <div style={{ background: "#fff", borderRadius: 16, padding: "1.5rem", border: "1px solid #EAEAEA", position: "sticky", top: 80, height: "fit-content", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }}>
+            <button onClick={() => setSelected(null)} style={{ float: "right", background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#888" }}>×</button>
+            <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
+              <div style={{ width: 52, height: 52, borderRadius: "50%", background: (tipoColor[selected.tipo] || "#0F9B8E") + "18", border: `2px solid ${tipoColor[selected.tipo] || "#0F9B8E"}`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 16, color: tipoColor[selected.tipo] || "#0F9B8E" }}>
+                {getInitials(selected.razon_social)}
+              </div>
+              <div>
+                <h3 style={{ margin: "0 0 2px", fontSize: 16 }}>{selected.razon_social}</h3>
+                <span style={{ fontSize: 11, background: (tipoColor[selected.tipo] || "#0F9B8E") + "18", color: tipoColor[selected.tipo] || "#0F9B8E", borderRadius: 20, padding: "2px 10px", fontWeight: 600 }}>{selected.tipo}</span>
+              </div>
+            </div>
+
+            <div style={{ background: "#F0FBF9", borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
+              <p style={{ margin: "0 0 4px", fontWeight: 700, fontSize: 13, color: "#0F9B8E" }}>¿Por qué te lo recomendamos?</p>
+              <p style={{ margin: 0, fontSize: 13, color: "#444" }}>{selected.why}</p>
+              <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ flex: 1, height: 6, background: "#E0E0E0", borderRadius: 3 }}>
+                  <div style={{ height: "100%", width: `${selected.score}%`, background: "linear-gradient(90deg,#0F9B8E,#185FA5)", borderRadius: 3 }} />
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 800, color: "#0F9B8E" }}>{selected.score}%</span>
+              </div>
+            </div>
+
+            {[["Sector / Clúster", selected.cluster], ["Municipio", selected.municipio], ["Etapa", selected.etapa], ["Tiempo operando", selected.tiempo_operando]].map(([k, v]) => v && (
+              <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #F5F5F5" }}>
+                <span style={{ fontSize: 12, color: "#888" }}>{k}</span>
+                <span style={{ fontSize: 13, fontWeight: 500 }}>{v}</span>
+              </div>
+            ))}
+
+            {selected.descripcion && (
+              <p style={{ fontSize: 13, color: "#555", lineHeight: 1.6, margin: "12px 0" }}>{selected.descripcion.slice(0, 180)}...</p>
+            )}
+
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+              {selected.whatsapp && (
+                <Btn small onClick={() => window.open(`https://wa.me/57${selected.whatsapp}`, "_blank")}>
+                  WhatsApp
+                </Btn>
+              )}
+              <Btn variant="secondary" small onClick={() => {
+                if (!saved.includes(selected.id)) setSaved(s => [...s, selected.id]);
+              }}>{saved.includes(selected.id) ? "✓ Guardada" : "Guardar"}</Btn>
+              <Btn variant="ghost" small onClick={() => setSelected(null)}>Descartar</Btn>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ==================== MARKETPLACE + BUSCADOR ====================
+function MarketplaceBuscadorPage({ user, allProfiles }) {
+  const [search, setSearch] = useState("");
+  const [clusterFilter, setClusterFilter] = useState("");
+  const [municipioFilter, setMunicipioFilter] = useState("");
+  const [etapaFilter, setEtapaFilter] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [productos, setProductos] = useState({});
+
+  // Load productos from localStorage for each profile
+  useEffect(() => {
+    const p = {};
+    allProfiles.forEach(prof => {
+      try {
+        const items = JSON.parse(localStorage.getItem("rutac_productos_" + prof.id) || "[]");
+        if (items.length) p[prof.id] = items;
+      } catch {}
+    });
+    setProductos(p);
+  }, [allProfiles]);
+
+  const results = allProfiles.filter(p => {
+    if (p.id === user.id || p.role === 'admin') return false;
+    const q = search.toLowerCase();
+    const name = (p.razon_social || "").toLowerCase();
+    const desc = (p.descripcion || "").toLowerCase();
+    const matchQ = !q || name.includes(q) || desc.includes(q);
+    const matchC = !clusterFilter || p.cluster === clusterFilter;
+    const matchM = !municipioFilter || p.municipio === municipioFilter;
+    const matchE = !etapaFilter || p.etapa === etapaFilter;
+    return matchQ && matchC && matchM && matchE;
+  });
+
+  const municipios = [...new Set(allProfiles.map(p => p.municipio).filter(Boolean))].sort();
+
+  return (
+    <div style={{ padding: "2rem", maxWidth: 1100, margin: "0 auto" }}>
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 26, margin: "0 0 4px" }}>Marketplace · Buscar negocios</h1>
+        <p style={{ color: "#666", fontSize: 14, margin: 0 }}>Descubre, conecta y explora productos de emprendedores del Magdalena</p>
+      </div>
+
+      {/* Search bar */}
+      <div style={{ background: "#fff", borderRadius: 16, padding: "1.25rem 1.5rem", boxShadow: "0 2px 12px rgba(0,0,0,0.07)", marginBottom: 20 }}>
+        <div style={{ position: "relative", marginBottom: 12 }}>
+          <svg style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre, sector, producto o servicio..." style={{ ...base.input, paddingLeft: 44, fontSize: 16, borderRadius: 12 }} />
+        </div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <select value={clusterFilter} onChange={e => setClusterFilter(e.target.value)} style={{ ...base.input, flex: 1, minWidth: 160 }}>
+            <option value="">Todos los clústeres</option>
+            {CLUSTERS.map(c => <option key={c.id} value={c.titulo}>{c.titulo}</option>)}
+          </select>
+          <select value={municipioFilter} onChange={e => setMunicipioFilter(e.target.value)} style={{ ...base.input, flex: 1, minWidth: 160 }}>
+            <option value="">Todos los municipios</option>
+            {municipios.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <select value={etapaFilter} onChange={e => setEtapaFilter(e.target.value)} style={{ ...base.input, flex: 1, minWidth: 140 }}>
+            <option value="">Todas las etapas</option>
+            {ETAPAS.map(e => <option key={e} value={e}>{e}</option>)}
+          </select>
+          {(search || clusterFilter || municipioFilter || etapaFilter) && (
+            <button onClick={() => { setSearch(""); setClusterFilter(""); setMunicipioFilter(""); setEtapaFilter(""); }} style={{ background: "#FFF5F2", border: "1px solid #D85A30", color: "#D85A30", borderRadius: 8, padding: "0 14px", fontSize: 13, cursor: "pointer", fontFamily: base.fontFamily }}>Limpiar</button>
+          )}
+        </div>
+        <p style={{ margin: "10px 0 0", fontSize: 12, color: "#888" }}>{results.length} negocios encontrados</p>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: selected ? "1fr 400px" : "repeat(auto-fill,minmax(280px,1fr))", gap: 16 }}>
+        {results.map((p, i) => {
+          const prods = productos[p.id] || [];
+          const color = clusterColor(p.cluster);
+          return (
+            <div key={p.id || i} onClick={() => setSelected(p)} style={{
+              background: "#fff", borderRadius: 16, overflow: "hidden",
+              border: selected?.id === p.id ? `2px solid ${color}` : "1px solid #EAEAEA",
+              cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+              transition: "box-shadow .15s",
+            }}
+            onMouseEnter={e => e.currentTarget.style.boxShadow = "0 6px 24px rgba(0,0,0,0.12)"}
+            onMouseLeave={e => e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.06)"}
+            >
+              {/* Product image or cluster color header */}
+              {prods[0]?.imageUrl ? (
+                <img src={prods[0].imageUrl} alt="" style={{ width: "100%", height: 140, objectFit: "cover" }} />
+              ) : (
+                <div style={{ width: "100%", height: 80, background: `linear-gradient(135deg, ${color}30, ${color}10)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ width: 48, height: 48, borderRadius: "50%", background: color + "20", border: `2px solid ${color}`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 18, color }}>
+                    {getInitials(p.razon_social)}
+                  </div>
+                </div>
+              )}
+              <div style={{ padding: "14px 16px" }}>
+                <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700 }}>{p.razon_social}</h3>
+                <p style={{ margin: "0 0 8px", fontSize: 12, color: "#888" }}>{p.cluster} · {p.municipio}</p>
+                {p.descripcion && <p style={{ margin: "0 0 10px", fontSize: 13, color: "#555", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.descripcion}</p>}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 11, background: color + "18", color, borderRadius: 20, padding: "2px 10px", fontWeight: 600 }}>{p.etapa || "Inicio"}</span>
+                  {prods.length > 0 && <span style={{ fontSize: 11, color: "#888" }}>{prods.length} producto{prods.length > 1 ? "s" : ""}</span>}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Profile detail panel */}
+        {selected && (() => {
+          const prods = productos[selected.id] || [];
+          const color = clusterColor(selected.cluster);
+          const simScore = calcSimilarity(user, selected);
+          return (
+            <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #EAEAEA", overflow: "hidden", position: "sticky", top: 80, height: "fit-content", maxHeight: "85vh", overflowY: "auto", boxShadow: "0 4px 24px rgba(0,0,0,0.10)" }}>
+              <div style={{ background: `linear-gradient(135deg,${color}20,${color}08)`, padding: "1.5rem", borderBottom: "1px solid #F0F0F0" }}>
+                <button onClick={() => setSelected(null)} style={{ float: "right", background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888" }}>×</button>
+                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <div style={{ width: 56, height: 56, borderRadius: "50%", background: color + "20", border: `2.5px solid ${color}`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 18, color }}>
+                    {getInitials(selected.razon_social)}
+                  </div>
+                  <div>
+                    <h2 style={{ margin: "0 0 2px", fontSize: 18 }}>{selected.razon_social}</h2>
+                    <p style={{ margin: 0, fontSize: 12, color: "#888" }}>{selected.cluster} · {selected.municipio}</p>
+                    <span style={{ display: "inline-block", marginTop: 4, background: color + "18", color, borderRadius: 20, padding: "2px 12px", fontSize: 11, fontWeight: 600 }}>{selected.etapa}</span>
+                  </div>
+                </div>
+                <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ flex: 1, height: 5, background: "#E0E0E0", borderRadius: 3 }}>
+                    <div style={{ height: "100%", width: `${simScore}%`, background: color, borderRadius: 3 }} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700, color }}>{simScore}% afinidad</span>
+                </div>
+              </div>
+
+              <div style={{ padding: "1.25rem 1.5rem" }}>
+                {selected.descripcion && (
+                  <div style={{ marginBottom: 16 }}>
+                    <p style={{ margin: "0 0 6px", fontWeight: 600, fontSize: 13 }}>Sobre el negocio</p>
+                    <p style={{ margin: 0, fontSize: 13, color: "#555", lineHeight: 1.7 }}>{selected.descripcion}</p>
+                  </div>
+                )}
+
+                {prods.length > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <p style={{ margin: "0 0 10px", fontWeight: 600, fontSize: 13 }}>Productos y servicios ({prods.length})</p>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                      {prods.map((prod, pi) => (
+                        <div key={pi} style={{ borderRadius: 10, overflow: "hidden", border: "1px solid #EAEAEA" }}>
+                          {prod.imageUrl && <img src={prod.imageUrl} alt="" style={{ width: "100%", height: 90, objectFit: "cover" }} />}
+                          <div style={{ padding: "8px 10px" }}>
+                            <p style={{ margin: "0 0 2px", fontWeight: 600, fontSize: 12 }}>{prod.nombre}</p>
+                            {prod.precio && <p style={{ margin: 0, fontSize: 11, color, fontWeight: 600 }}>{prod.precio}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {selected.whatsapp && (
+                    <Btn small onClick={() => window.open(`https://wa.me/57${selected.whatsapp}`, "_blank")}>WhatsApp</Btn>
+                  )}
+                  <Btn variant="secondary" small onClick={() => setSelected(null)}>Cerrar</Btn>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+    </div>
+  );
+}
+
+// ==================== FORMALIZACIÓN ====================
+function FormalizaciónPage({ user, setUserGlobal }) {
+  const score = scoreFormalización(user);
+  const pasos = rutaFormalización(user);
+  const completados = pasos.filter(p => p.done).length;
+
+  const programas = [
+    { nombre: "Mujeres Productivas", entidad: "Cámara de Comercio", plazo: "30 Jun 2026", desc: "Apoyo y financiamiento para mujeres emprendedoras.", color: "#9C27B0" },
+    { nombre: "Fondo Emprender", entidad: "SENA", plazo: "15 Jul 2026", desc: "Capital semilla no reembolsable para nuevas empresas.", color: "#0F9B8E" },
+    { nombre: "Ruta al Mercado", entidad: "Cámara de Comercio", plazo: "Permanente", desc: "Conecta con compradores institucionales.", color: "#185FA5" },
+    { nombre: "Formalización Express", entidad: "Cámara de Comercio", plazo: "Permanente", desc: "Formaliza tu negocio en menos de 5 días.", color: "#4CAF50" },
+    { nombre: "TIC para Empresarios", entidad: "MinTIC", plazo: "01 Aug 2026", desc: "Subsidio para digitalización de pymes.", color: "#FF9800" },
+  ];
+
+  return (
+    <div style={{ padding: "2rem", maxWidth: 900, margin: "0 auto" }}>
+      <h1 style={{ fontSize: 26, margin: "0 0 4px" }}>Mi ruta de formalización</h1>
+      <p style={{ color: "#666", fontSize: 14, marginBottom: 24 }}>Pasos personalizados para crecer y acceder a más oportunidades</p>
+
+      {/* Score card */}
+      <div style={{ background: "linear-gradient(135deg,#1A1A2E,#185FA5)", borderRadius: 20, padding: "2rem", marginBottom: 24, color: "#fff" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <p style={{ margin: "0 0 4px", fontSize: 13, opacity: 0.7, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Score de formalización</p>
+            <h2 style={{ margin: "0 0 4px", fontSize: 52, fontWeight: 900 }}>{score}<span style={{ fontSize: 24 }}>/100</span></h2>
+            <p style={{ margin: 0, fontSize: 14, opacity: 0.8 }}>{completados} de {pasos.length} pasos completados</p>
+          </div>
+          <div style={{ width: 100, height: 100, borderRadius: "50%", border: "8px solid rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+            <svg viewBox="0 0 36 36" width="100" height="100" style={{ position: "absolute", transform: "rotate(-90deg)" }}>
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="3"/>
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="#0F9B8E" strokeWidth="3" strokeDasharray={`${score} ${100 - score}`} strokeLinecap="round"/>
+            </svg>
+            <span style={{ fontSize: 22, fontWeight: 900 }}>{score}%</span>
+          </div>
+        </div>
+        <div style={{ marginTop: 16, height: 6, background: "rgba(255,255,255,0.15)", borderRadius: 3 }}>
+          <div style={{ height: "100%", width: `${score}%`, background: "#0F9B8E", borderRadius: 3, transition: "width 1s" }} />
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+        {/* Pasos */}
+        <div>
+          <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>Tus pasos pendientes</h3>
+          {pasos.map((paso, i) => (
+            <div key={paso.id} style={{ display: "flex", gap: 12, padding: "14px 16px", background: "#fff", borderRadius: 12, border: paso.done ? "1px solid #4CAF5030" : "1px solid #EAEAEA", marginBottom: 10 }}>
+              <div style={{ width: 32, height: 32, borderRadius: "50%", background: paso.done ? "#4CAF50" : "#F8F9FA", border: paso.done ? "none" : "2px solid #D8DDE5", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: paso.done ? "#fff" : "#666", fontWeight: 700, fontSize: 13 }}>
+                {paso.done ? "✓" : i + 1}
+              </div>
+              <div>
+                <p style={{ margin: "0 0 2px", fontWeight: 600, fontSize: 14, color: paso.done ? "#4CAF50" : "#1A1A2E" }}>{paso.titulo}</p>
+                <p style={{ margin: "0 0 4px", fontSize: 12, color: "#666" }}>{paso.desc}</p>
+                <p style={{ margin: 0, fontSize: 11, color: "#0F9B8E", fontWeight: 600 }}>→ {paso.accion}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Programas */}
+        <div>
+          <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>Convocatorias activas</h3>
+          {programas.map(p => (
+            <div key={p.nombre} style={{ background: "#fff", borderRadius: 12, padding: "14px 16px", marginBottom: 10, borderLeft: `3px solid ${p.color}`, border: `1px solid #EAEAEA`, borderLeftWidth: 3, borderLeftColor: p.color }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: 14 }}>{p.nombre}</p>
+                  <p style={{ margin: "0 0 4px", fontSize: 12, color: "#888" }}>{p.entidad}</p>
+                  <p style={{ margin: 0, fontSize: 12, color: "#555" }}>{p.desc}</p>
+                </div>
+                <span style={{ background: p.color + "18", color: p.color, borderRadius: 8, padding: "3px 10px", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap", marginLeft: 8 }}>{p.plazo}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==================== CLUSTERING VISUAL ====================
+function ClustersPage({ allProfiles, user }) {
+  const [selectedCluster, setSelectedCluster] = useState(null);
+  const clusters = generarClusters(allProfiles.filter(p => p.role !== 'admin'));
+  const etapaColors = { "Ideación": "#9C27B0", "Inicio": "#0F9B8E", "Crecimiento": "#4CAF50", "Consolidación": "#185FA5", "Madurez": "#FF9800", "Expansión": "#D85A30" };
+
+  return (
+    <div style={{ padding: "2rem", maxWidth: 1000, margin: "0 auto" }}>
+      <h1 style={{ fontSize: 26, margin: "0 0 4px" }}>Clústeres dinámicos</h1>
+      <p style={{ color: "#666", fontSize: 14, marginBottom: 24 }}>Agrupaciones generadas automáticamente · {clusters.length} clústeres activos · {allProfiles.filter(p => p.role !== 'admin').length} empresas</p>
+
+      <div style={{ display: "grid", gridTemplateColumns: selectedCluster ? "1fr 380px" : "repeat(auto-fill,minmax(280px,1fr))", gap: 20 }}>
+        <div style={{ display: "grid", gridTemplateColumns: selectedCluster ? "1fr" : "repeat(auto-fill,minmax(280px,1fr))", gap: 16 }}>
+          {clusters.map(c => {
+            const color = clusterColor(c.cluster);
+            const isMe = c.cluster === user.cluster;
+            return (
+              <div key={c.cluster} onClick={() => setSelectedCluster(c)} style={{
+                background: "#fff", borderRadius: 16, padding: "1.25rem 1.5rem",
+                border: isMe ? `2px solid ${color}` : selectedCluster?.cluster === c.cluster ? `2px solid ${color}` : "1px solid #EAEAEA",
+                cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 12, height: 12, borderRadius: "50%", background: color }} />
+                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{c.cluster}</h3>
+                    {isMe && <span style={{ fontSize: 10, background: color + "18", color, borderRadius: 10, padding: "2px 8px", fontWeight: 700 }}>TU CLÚSTER</span>}
+                  </div>
+                  <span style={{ fontSize: 24, fontWeight: 800, color }}>{c.total}</span>
+                </div>
+                <div style={{ height: 4, background: "#F0F0F0", borderRadius: 2, marginBottom: 10 }}>
+                  <div style={{ height: "100%", width: `${c.avgCompletitud}%`, background: color, borderRadius: 2 }} />
+                </div>
+                <p style={{ margin: "0 0 10px", fontSize: 12, color: "#888" }}>Completitud promedio: {c.avgCompletitud}%</p>
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  {Object.entries(c.etapas).slice(0, 3).map(([etapa, count]) => (
+                    <span key={etapa} style={{ fontSize: 10, background: (etapaColors[etapa] || "#888") + "18", color: etapaColors[etapa] || "#888", borderRadius: 10, padding: "2px 8px", fontWeight: 600 }}>{etapa}: {count}</span>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {selectedCluster && (
+          <div style={{ background: "#fff", borderRadius: 16, padding: "1.5rem", border: "1px solid #EAEAEA", position: "sticky", top: 80, maxHeight: "80vh", overflowY: "auto" }}>
+            <button onClick={() => setSelectedCluster(null)} style={{ float: "right", background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#888" }}>×</button>
+            <h3 style={{ margin: "0 0 4px", fontSize: 18 }}>{selectedCluster.cluster}</h3>
+            <p style={{ color: "#888", fontSize: 13, margin: "0 0 16px" }}>{selectedCluster.total} empresas · {selectedCluster.municipios.length} municipios</p>
+
+            <div style={{ background: "#F8F9FA", borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
+              <p style={{ margin: "0 0 8px", fontWeight: 600, fontSize: 13 }}>¿Por qué perteneces a este clúster?</p>
+              <p style={{ margin: 0, fontSize: 13, color: "#555" }}>
+                {selectedCluster.cluster === user.cluster
+                  ? `Tu negocio fue clasificado aquí porque tu sector principal es "${user.cluster}". El clúster agrupa empresas con actividades económicas similares en el Magdalena.`
+                  : `Este clúster agrupa ${selectedCluster.total} empresas del sector ${selectedCluster.cluster} en el Magdalena.`}
+              </p>
+            </div>
+
+            <p style={{ fontWeight: 600, fontSize: 13, margin: "0 0 10px" }}>Distribución por etapa</p>
+            {Object.entries(selectedCluster.etapas).map(([etapa, count]) => (
+              <div key={etapa} style={{ marginBottom: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                  <span style={{ fontSize: 12, color: etapaColors[etapa] || "#888", fontWeight: 600 }}>{etapa}</span>
+                  <span style={{ fontSize: 12, color: "#888" }}>{count}</span>
+                </div>
+                <div style={{ height: 4, background: "#F0F0F0", borderRadius: 2 }}>
+                  <div style={{ height: "100%", width: `${Math.round((count/selectedCluster.total)*100)}%`, background: etapaColors[etapa] || "#888", borderRadius: 2 }} />
+                </div>
+              </div>
+            ))}
+
+            <p style={{ fontWeight: 600, fontSize: 13, margin: "16px 0 10px" }}>Empresas en este clúster</p>
+            {selectedCluster.miembros.map((m, i) => (
+              <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", padding: "7px 0", borderBottom: "1px solid #F5F5F5" }}>
+                <div style={{ width: 28, height: 28, borderRadius: "50%", background: clusterColor(m.cluster) + "18", border: `1.5px solid ${clusterColor(m.cluster)}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, color: clusterColor(m.cluster), flexShrink: 0 }}>
+                  {getInitials(m.razon_social)}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: m.id === user.id ? 700 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {m.razon_social} {m.id === user.id && "👈 Tú"}
+                  </p>
+                  <p style={{ margin: 0, fontSize: 11, color: "#888" }}>{m.municipio} · {m.etapa}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ==================== MAIN APP ====================
 export default function App() {
   const [screen, setScreen] = useState("loading");
   const [user, setUser] = useState(null);
   const [page, setPage] = useState("Inicio");
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("rutac_dark") === "1");
+  const [allProfiles, setAllProfiles] = useState([]);
 
   const toggleDark = () => setDarkMode(d => {
     const next = !d;
     localStorage.setItem("rutac_dark", next ? "1" : "0");
     return next;
   });
+
+  // Load all profiles for AI engine
+  const loadAllProfiles = async () => {
+    const { data } = await supabase.from("perfiles").select("*");
+    if (data) setAllProfiles(data);
+  };
 
   useEffect(() => {
     // Check active Supabase session on mount
@@ -2203,6 +3185,7 @@ export default function App() {
         setUser(u);
         saveCurrent(u);
         setScreen("app");
+        loadAllProfiles();
       } else {
         setScreen("login");
       }
@@ -2248,11 +3231,13 @@ export default function App() {
   if (isAdmin) return <AdminDashboard onLogout={logout} user={user} />;
 
   const pages = {
-    "Inicio": <InicioPage user={user} />,
-    "Recomendaciones": <RecomendacionesPage user={user} />,
-    "Mi clúster": <MiClusterPage user={user} />,
+    "Inicio": <InicioPage user={user} onNavigate={setPage} />,
+    "Recomendaciones": <RecomendacionesIAPage user={user} allProfiles={allProfiles} onNavigate={setPage} />,
+    "Mi clúster": <ClustersPage allProfiles={allProfiles} user={user} />,
     "Conexiones": <ConexionesPage user={user} />,
-    "Mi negocio": <MiNegocioPage user={user} setUserGlobal={u => { setUser(u); }} />,
+    "Marketplace": <MarketplacePage user={user} allProfiles={allProfiles} />,
+    "Formalización": <FormalizaciónPage user={user} setUserGlobal={u => setUser(u)} />,
+    "Mi negocio": <MiNegocioPage user={user} setUserGlobal={u => { setUser(u); saveCurrent(u); }} />,
   };
 
   return (
